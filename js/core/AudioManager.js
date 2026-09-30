@@ -59,6 +59,8 @@ export class AudioManager {
       case 'growl': return this._growl();
       case 'hit': return this._hit();
       case 'pickup': return this._pickup();
+      case 'hurt': return this._hurt();
+      case 'objective': return this._objective();
       case 'death': return this._death();
       case 'victory': return this._victory();
       default: return;
@@ -125,6 +127,47 @@ export class AudioManager {
     osc.connect(g).connect(this.master);
     osc.start(now);
     osc.stop(now + 0.2);
+  }
+
+  /** Player took damage: a short, dull low thud + a bit of noise sting. */
+  _hurt() {
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(160, now);
+    osc.frequency.exponentialRampToValueAtTime(70, now + 0.22);
+    const g = this._envGain(0.004, 0.24, 0.7);
+    osc.connect(g).connect(this.master);
+    osc.start(now);
+    osc.stop(now + 0.26);
+
+    const src = this._noiseSource(0.12);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 900;
+    bp.Q.value = 0.8;
+    const ng = this._envGain(0.002, 0.12, 0.35);
+    src.connect(bp).connect(ng).connect(this.master);
+    src.start(now);
+    src.stop(now + 0.13);
+  }
+
+  /** Objective advanced: a bright, hopeful two-note chime. */
+  _objective() {
+    const notes = [659.25, 987.77]; // E5 -> B5
+    notes.forEach((freq, i) => {
+      const start = this.ctx.currentTime + i * 0.12;
+      const osc = this.ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.exponentialRampToValueAtTime(0.45, start + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + 0.26);
+      osc.connect(g).connect(this.master);
+      osc.start(start);
+      osc.stop(start + 0.28);
+    });
   }
 
   _death() {

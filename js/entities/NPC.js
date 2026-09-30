@@ -57,11 +57,11 @@ export class NPC {
     this._dialogueIndex = 0;
 
     // Wander / hostile movement state.
-    this.speed = this.hostile ? 2.8 : 1.1;
-    this.senseRadius = 20;
+    this.speed = this.hostile ? 2.6 : 1.1;
+    this.senseRadius = this.hostile ? 16 : 20;
     this.attackRange = 1.6;
-    this.attackDamage = 10;
-    this.attackCooldown = 1.1;
+    this.attackDamage = 8;
+    this.attackCooldown = 1.2;
     this._attackCd = 0;
     this._wanderDir = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
     this._wanderT = 1 + Math.random() * 3;

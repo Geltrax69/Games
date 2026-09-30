@@ -32,6 +32,7 @@ export class Input {
       reload: false,
       attack: false,
       attackHeld: false,
+      pause: false,       // Esc: toggle pause
     };
 
     this.controls = new PointerLockControls(camera, document.body);
@@ -46,6 +47,13 @@ export class Input {
   /** Enable/disable pointer-lock-on-click. Called by the Game per state. */
   setEnabled(enabled) {
     this._enabled = enabled;
+  }
+
+  /** Release pointer lock (used when pausing). Safe to call when unlocked. */
+  releaseLock() {
+    if (this.locked && this.controls && typeof this.controls.unlock === 'function') {
+      this.controls.unlock();
+    }
   }
 
   requestLock() {
@@ -93,6 +101,7 @@ export class Input {
       case 'Digit2': if (down) this.actions.switchWeapon = 2; break;
       case 'KeyE': if (down) this.actions.interact = true; break;
       case 'KeyR': if (down) this.actions.reload = true; break;
+      case 'Escape': if (down) this.actions.pause = true; break;
       default: return;
     }
   }
@@ -104,6 +113,7 @@ export class Input {
     this.actions.interact = false;
     this.actions.reload = false;
     this.actions.attack = false;
+    this.actions.pause = false;
     return a;
   }
 

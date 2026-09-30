@@ -181,6 +181,14 @@ export class Game {
   }
 
   _onQuestChange(s) {
+    // Play the objective-complete chime only when the objective id actually
+    // changes (not on every ingredient-count tick), and never for the initial
+    // objective set during construction/reset.
+    if (this.objectiveId != null
+        && s.objectiveId !== this.objectiveId
+        && this.state === GameState.PLAYING) {
+      this.audio.playSfx('objective');
+    }
     this.objectiveId = s.objectiveId;
     this.objectiveText = s.objectiveText;
   }
@@ -194,10 +202,12 @@ export class Game {
     const startBtn = document.getElementById('start-button');
     const winBtn = document.getElementById('win-restart-button');
     const loseBtn = document.getElementById('lose-restart-button');
+    const resumeBtn = document.getElementById('resume-button');
 
     if (startBtn) startBtn.addEventListener('click', () => this._beginPlay());
     if (winBtn) winBtn.addEventListener('click', () => this._restart());
     if (loseBtn) loseBtn.addEventListener('click', () => this._restart());
+    if (resumeBtn) resumeBtn.addEventListener('click', () => this.togglePause());
   }
 
   _beginPlay() {
@@ -229,6 +239,8 @@ export class Game {
 
   _onPlayerDamage() {
     if (this.hud) this.hud.flashDamage();
+    // Player-damage audio cue (distinct from zombie 'hit' and 'death').
+    if (this.player && this.player.alive) this.audio.playSfx('hurt');
   }
 
   _onPlayerDeath() {
@@ -242,6 +254,7 @@ export class Game {
     const startScreen = document.getElementById('start-screen');
     const winScreen = document.getElementById('win-screen');
     const loseScreen = document.getElementById('lose-screen');
+    const pauseScreen = document.getElementById('pause-screen');
     const hud = document.getElementById('hud');
     const crosshair = document.getElementById('crosshair');
 
@@ -250,6 +263,7 @@ export class Game {
     show(startScreen, next === GameState.START);
     show(winScreen, next === GameState.WIN);
     show(loseScreen, next === GameState.LOSE);
+    show(pauseScreen, next === GameState.PAUSED);
     show(hud, next === GameState.PLAYING || next === GameState.PAUSED);
     show(crosshair, next === GameState.PLAYING);
 
@@ -269,8 +283,32 @@ export class Game {
   _loop() {
     this._rafId = requestAnimationFrame(this._loop);
     const dt = Math.min(this._clock.getDelta(), 0.1);
+
+    // Pause toggle (Esc) is handled here so it works while PLAYING or PAUSED,
+    // even though the main update() early-returns when not PLAYING. Consuming
+    // actions here would clobber gameplay input, so only peek at pause and
+    // clear it; update() consumes the rest during PLAYING.
+    if ((this.state === GameState.PLAYING || this.state === GameState.PAUSED)
+        && this.input.actions.pause) {
+      this.input.actions.pause = false;
+      this.togglePause();
+    }
+
     this.update(dt);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Toggle between PLAYING and PAUSED, releasing/regaining pointer lock. */
+  togglePause() {
+    if (this.state === GameState.PLAYING) {
+      this.setState(GameState.PAUSED);
+      this.input.setEnabled(false);
+      this.input.releaseLock();
+    } else if (this.state === GameState.PAUSED) {
+      this.setState(GameState.PLAYING);
+      this.input.setEnabled(true);
+      this.input.requestLock();
+    }
   }
 
   update(dt) {

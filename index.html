@@ -52,13 +52,42 @@
     <div class="overlay-inner">
       <h1>ZOMBIE APOCALYPSE</h1>
       <h2>Odisha Outbreak</h2>
-      <p>You wake up in your room. The streets outside are overrun.
-         Grab your knife, survive, and help find a cure.</p>
-      <p class="controls-hint">
-        WASD move &middot; Mouse look &middot; Shift run &middot; Space jump &middot;
-        1/2 switch weapon &middot; E interact &middot; R reload &middot; Click to attack
+      <p class="story">
+        You wake up in your room in Odisha, India. Overnight the outbreak spread:
+        the people outside have turned into zombies. With only a small knife from
+        your room, you must survive the infested streets, find a gun, and link up
+        with the few survivors holding out at a research center. They are racing to
+        build a cure. Gather the ingredients they need, travel north to the medical
+        facility, deliver the cure to the lead scientist, then board the helicopter
+        to spread it across the world.
       </p>
+      <div class="controls-legend">
+        <span class="hud-label">CONTROLS</span>
+        <ul>
+          <li><b>WASD</b> move</li>
+          <li><b>Shift</b> run</li>
+          <li><b>Mouse</b> look</li>
+          <li><b>Click / Left-click</b> fire gun or swing knife</li>
+          <li><b>1 / 2</b> switch weapon (knife / pistol)</li>
+          <li><b>R</b> reload</li>
+          <li><b>E</b> interact (talk, enter, pick up, board)</li>
+          <li><b>Esc</b> pause</li>
+        </ul>
+      </div>
       <button id="start-button" type="button">START</button>
+    </div>
+  </div>
+
+  <!-- Pause screen -->
+  <div id="pause-screen" class="overlay-screen hidden">
+    <div class="overlay-inner">
+      <h1>PAUSED</h1>
+      <p>The outbreak waits for no one. Take a breath.</p>
+      <p class="controls-hint">
+        WASD move &middot; Shift run &middot; Mouse look &middot; Click attack &middot;
+        1/2 weapon &middot; R reload &middot; E interact &middot; Esc resume
+      </p>
+      <button id="resume-button" type="button">RESUME</button>
     </div>
   </div>
 

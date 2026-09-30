@@ -35,11 +35,16 @@ export class Zombie {
     this.alive = true;
     this.radius = 0.5;
 
-    this.speed = 2.4 + Math.random() * 0.8;
-    this.senseRadius = 22;
+    // Balance: zombies are slower than the player's walk (4.2) and much slower
+    // than a run (7.6) so they can be kited, sense from a modest range so the
+    // player is not swarmed from across the map, and hit for a survivable
+    // amount on a slightly longer cooldown. Tuned so the knife-only opening is
+    // winnable but not trivial.
+    this.speed = 2.2 + Math.random() * 0.7;
+    this.senseRadius = 16;
     this.attackRange = 1.6;
-    this.attackDamage = 12;
-    this.attackCooldown = 1.0;
+    this.attackDamage = 9;
+    this.attackCooldown = 1.2;
     this._attackCd = 0;
 
     this.state = ZombieState.IDLE;

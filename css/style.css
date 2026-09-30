@@ -179,6 +179,44 @@ html, body {
   color: #7f8a9c !important;
 }
 
+.overlay-inner p.story {
+  font-size: 15px;
+  line-height: 1.65;
+  text-align: left;
+  color: #c8d0dc;
+}
+
+.controls-legend {
+  margin: 6px auto 22px;
+  padding: 14px 18px;
+  max-width: 460px;
+  background: rgba(10, 14, 22, 0.5);
+  border: 1px solid rgba(120, 140, 170, 0.25);
+  border-radius: 6px;
+  text-align: left;
+}
+
+.controls-legend .hud-label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.controls-legend ul {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 20px;
+}
+
+.controls-legend li {
+  font-size: 13px;
+  color: #aeb8c8;
+}
+
+.controls-legend li b {
+  color: #ffd27f;
+}
+
 .overlay-inner button {
   margin-top: 10px;
   padding: 14px 42px;
