@@ -4,8 +4,8 @@
 // terrain / buildings / props, a list of circular colliders the player and
 // zombies are blocked against, zombie spawn points, NPC placements, pickups,
 // and named exit trigger volumes that request travel to another zone. All of
-// its geometry is assembled from AssetFactory primitives so the game runs
-// fully offline.
+// Its geometry is assembled through AssetFactory, which combines bundled local
+// character models with generated environment geometry and PBR-style textures.
 //
 // Concrete zones (OdishaCity, MedicalFacility) subclass this and implement
 // build() to populate the group. The Game calls load(scene) once to attach
@@ -71,38 +71,21 @@ export class Zone {
   }
 
   /**
-   * Release GPU resources owned by this zone. Traverses the group disposing
-   * every mesh geometry and material.
-   *
-   * IMPORTANT: textures are intentionally NOT disposed here. AssetFactory
-   * caches textures in a module-level map (keyed 'ground', 'building-*',
-   * 'crate', 'room-floor', ...) and hands the SAME texture object to meshes in
-   * both zones and to every rebuilt zone after a restart. Disposing a texture
-   * here would corrupt the copy still in use by the other zone (or by the next
-   * rebuild). Geometries and materials, by contrast, are created fresh per mesh
-   * and are safe to dispose. After dispose the zone must be rebuilt (_built is
-   * cleared) before it can be loaded again.
+   * Stop entity mixers and release instance-owned geometry/materials. Imported
+   * model textures and factory source textures stay shared; repeated per-zone
+   * texture clones are marked as owned and are released with this subtree.
    */
   dispose() {
     if (!this.group) return;
-    this.group.traverse((obj) => {
-      if (obj.geometry && typeof obj.geometry.dispose === 'function') {
-        obj.geometry.dispose();
-      }
-      const mat = obj.material;
-      if (mat) {
-        if (Array.isArray(mat)) {
-          for (const m of mat) { if (m && typeof m.dispose === 'function') m.dispose(); }
-        } else if (typeof mat.dispose === 'function') {
-          mat.dispose();
-        }
-      }
-    });
-    // The group's meshes now reference disposed geometries/materials; drop them
-    // and force a rebuild before this zone is loaded again.
+    for (const zombie of this.zombies) {
+      if (zombie && typeof zombie.dispose === 'function') zombie.dispose();
+    }
+    for (const npc of this.npcs) {
+      if (npc && typeof npc.dispose === 'function') npc.dispose();
+    }
+    AssetFactory.disposeObject3D(this.group);
     this.group.clear();
-    // Clear the entity/collider bookkeeping so a rebuild (build() re-populates
-    // these) does not accumulate stale entries.
+    // Clear bookkeeping so build() can safely repopulate a reloaded zone.
     this.colliders = [];
     this.zombies = [];
     this.npcs = [];
@@ -196,6 +179,7 @@ export class Zone {
     for (let i = this.npcs.length - 1; i >= 0; i--) {
       const n = this.npcs[i];
       if (!n.alive && n.isRemovable && n.isRemovable()) {
+        if (typeof n.dispose === 'function') n.dispose();
         this.group.remove(n.group);
         this.npcs.splice(i, 1);
       }

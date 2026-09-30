@@ -238,3 +238,62 @@ html, body {
 .overlay-inner button:active {
   transform: translateY(0);
 }
+
+/* ---------- Bootstrap / local asset loading ---------- */
+.loading-screen {
+  z-index: 40;
+  background:
+    linear-gradient(115deg, rgba(7, 15, 19, 0.97), rgba(23, 18, 16, 0.94)),
+    radial-gradient(circle at 50% 30%, rgba(71, 119, 128, 0.28), transparent 52%);
+}
+
+.loading-screen .overlay-inner {
+  width: min(560px, 88vw);
+}
+
+.loading-screen .loading-kicker {
+  margin-bottom: 10px;
+  color: #86aeb5;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 4px;
+}
+
+.loading-screen h1 {
+  color: #d7e3de;
+  font-size: clamp(28px, 5vw, 42px);
+  text-shadow: 0 0 20px rgba(105, 174, 174, 0.25);
+}
+
+#loading-track {
+  width: min(440px, 78vw);
+  height: 8px;
+  margin: 28px auto 16px;
+  overflow: hidden;
+  border: 1px solid rgba(158, 198, 196, 0.36);
+  border-radius: 20px;
+  background: rgba(7, 12, 14, 0.72);
+}
+
+#loading-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #466f73, #a2c7bd);
+  box-shadow: 0 0 16px rgba(134, 190, 180, 0.5);
+  transition: width 180ms ease-out;
+}
+
+#loading-detail {
+  min-height: 26px;
+  margin-bottom: 8px;
+  color: #b9c7c5;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}
+
+.loading-screen .loading-note {
+  color: #6f817f;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
