@@ -1,7 +1,21 @@
 {
   "task_id": "task-zombie-apocalypse-game",
   "task_description": "Build a playable browser-based single-player 3D zombie-apocalypse game with three.js (vendored offline). Protagonist wakes in a room in Odisha, fights zombies with a knife then a gun, meets survivor NPCs, gets a cure quest from a research center, collects ingredients, travels to a medical facility, delivers the cure, and reaches a helicopter finale. Modular zone system, friendly+hostile+killable NPCs, HUD, win/lose. Single-player (not a true MMORPG) and one starting city + one travel zone, per the offline/static-site constraints. Runs via python3 -m http.server; all assets procedurally generated.",
-  "status": "in_progress",
+  "status": "completed",
   "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
-  "blocked_reason": null
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "No build step (static site); NODE_OPTIONS= node --check passes on all 14 JS modules. No unit-test framework by design; verification is a headless agent-browser harness driving real code paths. Full player-path story loop verified: start in OdishaCity/OBJ_WAKE -> leave room (real doorway-cross event) advances to OBJ_SURVIVE -> knife+gun combat -> collect 3 ingredients -> travel to MedicalFacility/OBJ_DELIVER -> WIN; triggerLose -> LOSE. window.__consoleErrors empty throughout. Test hooks drive the same real events a player triggers (no shortcut). Docker not applicable (no Dockerfile; static site)."
+  },
+  "review": {
+    "passes": 2,
+    "final_verdict": "APPROVED",
+    "v1": "NEEDS_CHANGES - blocking OBJ_WAKE soft-lock + 4 secondary issues (test hooks masking, zone GPU disposal, requiredIngredients undefined, over-broad error filter)",
+    "v2": "APPROVED - all 5 issues resolved and independently verified",
+    "review_files": ["2026-09-30-143709-review.md", "2026-09-30-144500-review.md"]
+  }
 }
