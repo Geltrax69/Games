@@ -63,7 +63,10 @@ export class Player {
   }
 
   _attachViewmodel() {
-    if (this.viewmodel && this.camera) this.camera.remove(this.viewmodel);
+    if (this.viewmodel) {
+      if (this.camera) this.camera.remove(this.viewmodel);
+      AssetFactory.disposeObject3D(this.viewmodel);
+    }
     const type = this.currentWeapon ? this.currentWeapon.type : 'knife';
     this.viewmodel = AssetFactory.makePlayerViewmodel(type);
     if (this.camera) this.camera.add(this.viewmodel);
@@ -233,7 +236,10 @@ export class Player {
   }
 
   dispose() {
-    if (this.viewmodel && this.camera) this.camera.remove(this.viewmodel);
+    if (!this.viewmodel) return;
+    if (this.camera) this.camera.remove(this.viewmodel);
+    AssetFactory.disposeObject3D(this.viewmodel);
+    this.viewmodel = null;
   }
 }
 

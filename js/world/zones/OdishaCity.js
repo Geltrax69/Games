@@ -13,7 +13,8 @@
 //   - a north exit trigger that travels to the MedicalFacility once all the
 //     ingredients are collected.
 //
-// Everything is built from AssetFactory primitives.
+// Characters use bundled local GLBs with procedural fallbacks; environment art
+// is generated through AssetFactory.
 
 import { Zone } from '../Zone.js';
 import { AssetFactory } from '../../assets/AssetFactory.js';
@@ -48,6 +49,7 @@ export class OdishaCity extends Zone {
   build() {
     // --- Ground (large so the city + room sit on it) ---
     this.group.add(AssetFactory.makeGround(220));
+    this._buildRoads();
 
     this._buildRoom();
     this._buildCity();
@@ -56,6 +58,28 @@ export class OdishaCity extends Zone {
     this._placeInitialPickups();
     this._placeZombieSpawns();
     this._placeExit();
+  }
+
+  _buildRoads() {
+    // A marked arterial runs from the room to the existing north-road trigger.
+    // It divides around the temple without changing any collider or trigger.
+    const roadSpecs = [
+      { x: 0, z: -16.5, width: 8, length: 19 },
+      { x: -6.5, z: -34, width: 4.8, length: 16, sidewalks: false },
+      { x: 6.5, z: -34, width: 4.8, length: 16, sidewalks: false },
+      { x: 0, z: -57.5, width: 8, length: 35 },
+      { x: 0, z: -27, width: 5, length: 13, rotation: Math.PI / 2, markings: false },
+      { x: 0, z: -41, width: 5, length: 13, rotation: Math.PI / 2, markings: false },
+    ];
+    for (const spec of roadSpecs) {
+      const road = AssetFactory.makeRoad(spec.width, spec.length, {
+        markings: spec.markings,
+        sidewalks: spec.sidewalks,
+      });
+      road.position.set(spec.x, 0, spec.z);
+      road.rotation.y = spec.rotation || 0;
+      this.group.add(road);
+    }
   }
 
   _buildRoom() {
@@ -100,13 +124,22 @@ export class OdishaCity extends Zone {
       ['tree', -20, -10], ['tree', 20, -10], ['tree', -24, -54], ['tree', 22, -56],
       ['crate', 6, -16], ['crate', -6, -16], ['barrel', 8, -40], ['barrel', -8, -40],
     ];
-    props.forEach(([kind, x, z]) => {
+    props.forEach(([kind, x, z], index) => {
       const p = AssetFactory.makeProp(kind);
       p.position.set(x, 0, z);
+      if (kind === 'car') p.rotation.y = index % 2 ? 0.18 : Math.PI / 2 + 0.08;
       this.group.add(p);
       const r = kind === 'car' ? 1.6 : kind === 'tree' ? 1.0 : 0.7;
       this.addCollider(x, z, r);
     });
+
+    // Rubble remains visual-only and hugs already blocked building edges.
+    for (const [x, z, rotation] of [[-16, -25, 0.3], [20, -43, -0.4], [-22, -63, 0.8]]) {
+      const rubble = AssetFactory.makeProp('rubble');
+      rubble.position.set(x, 0, z);
+      rubble.rotation.y = rotation;
+      this.group.add(rubble);
+    }
   }
 
   _buildResearchCenter() {

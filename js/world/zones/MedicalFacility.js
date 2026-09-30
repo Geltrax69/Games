@@ -7,7 +7,8 @@
 // helicopter. Delivering the ingredients unlocks the helicopter; boarding it
 // spreads the cure and triggers the WIN state.
 //
-// Built entirely from AssetFactory primitives.
+// Characters use bundled local GLBs with procedural fallbacks; environment art
+// is generated through AssetFactory.
 
 import { Zone } from '../Zone.js';
 import { AssetFactory } from '../../assets/AssetFactory.js';
@@ -31,6 +32,7 @@ export class MedicalFacility extends Zone {
 
   build() {
     this.group.add(AssetFactory.makeGround(200));
+    this._buildSiteSurfaces();
 
     this._buildFacility();
     this._placeNPCs();
@@ -41,11 +43,21 @@ export class MedicalFacility extends Zone {
     this._placeProps();
   }
 
+  _buildSiteSurfaces() {
+    const compound = AssetFactory.makeCompound(64, 64);
+    compound.position.set(0, 0, 4);
+    this.group.add(compound);
+
+    const approach = AssetFactory.makeRoad(9, 42, { markings: true, sidewalks: true });
+    approach.position.set(0, 0, 48);
+    this.group.add(approach);
+  }
+
   _buildFacility() {
     // Main facility building at the back (north, -Z).
     const fac = AssetFactory.makeFacility(22, 10, 16, 0x4ad0a3);
     fac.position.set(0, 0, -18);
-    fac.rotation.y = Math.PI; // door faces +Z toward the player
+    // AssetFactory facilities use +Z as their entrance side, toward the apron.
     this.group.add(fac);
     this.addCollider(0, -18, 12);
 
@@ -67,13 +79,20 @@ export class MedicalFacility extends Zone {
       ['crate', -6, 0], ['crate', 6, 0], ['barrel', 0, 12],
       ['tree', -24, 22], ['tree', 24, 22],
     ];
-    props.forEach(([kind, x, z]) => {
+    props.forEach(([kind, x, z], index) => {
       const p = AssetFactory.makeProp(kind);
       p.position.set(x, 0, z);
+      if (kind === 'car') p.rotation.y = index % 2 ? -0.12 : Math.PI / 2;
       this.group.add(p);
       const r = kind === 'car' ? 1.6 : kind === 'tree' ? 1.0 : 0.7;
       this.addCollider(x, z, r);
     });
+
+    for (const [x, z] of [[-10, -3], [12, -2]]) {
+      const rubble = AssetFactory.makeProp('rubble');
+      rubble.position.set(x, 0, z);
+      this.group.add(rubble);
+    }
   }
 
   _placeNPCs() {
@@ -149,6 +168,9 @@ export class MedicalFacility extends Zone {
   _placeHelicopter() {
     const hx = 22;
     const hz = 18;
+    const hardstand = AssetFactory.makeHelipad(4);
+    hardstand.position.set(hx, 0, hz);
+    this.group.add(hardstand);
     this.helicopter = AssetFactory.makeHelicopter();
     this.helicopter.position.set(hx, 0, hz);
     this.group.add(this.helicopter);

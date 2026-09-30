@@ -15,6 +15,7 @@ import { HUD } from '../ui/HUD.js';
 import { QuestManager } from '../quest/QuestManager.js';
 import { OdishaCity } from '../world/zones/OdishaCity.js';
 import { MedicalFacility } from '../world/zones/MedicalFacility.js';
+import { AssetFactory } from '../assets/AssetFactory.js';
 
 export const GameState = {
   START: 'START',
@@ -86,13 +87,29 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.08;
+    AssetFactory.configureRenderer(this.renderer);
     this.container.appendChild(this.renderer.domElement);
   }
 
   _initScene() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x1a1f2a);
-    this.scene.fog = new THREE.Fog(0x1a1f2a, 30, 160);
+    const skyCanvas = document.createElement('canvas');
+    skyCanvas.width = 32;
+    skyCanvas.height = 512;
+    const skyContext = skyCanvas.getContext('2d');
+    const gradient = skyContext.createLinearGradient(0, 0, 0, skyCanvas.height);
+    gradient.addColorStop(0, '#22455f');
+    gradient.addColorStop(0.46, '#607986');
+    gradient.addColorStop(0.72, '#a59683');
+    gradient.addColorStop(1, '#5c625d');
+    skyContext.fillStyle = gradient;
+    skyContext.fillRect(0, 0, skyCanvas.width, skyCanvas.height);
+    this._skyTexture = new THREE.CanvasTexture(skyCanvas);
+    this._skyTexture.colorSpace = THREE.SRGBColorSpace;
+    this.scene.background = this._skyTexture;
+    this.scene.fog = new THREE.Fog(0x768283, 32, 155);
   }
 
   _initCamera() {
@@ -103,24 +120,38 @@ export class Game {
       500
     );
     this.camera.position.set(0, 1.7, 6);
+    // A camera must be part of the rendered scene for its weapon-viewmodel
+    // children to render; PointerLockControls still owns this same object.
+    this.scene.add(this.camera);
   }
 
   _initLights() {
-    const ambient = new THREE.AmbientLight(0x556070, 0.7);
+    const hemisphere = new THREE.HemisphereLight(0x9ec3d8, 0x55483b, 1.45);
+    this.scene.add(hemisphere);
+
+    const ambient = new THREE.AmbientLight(0x81909b, 0.28);
     this.scene.add(ambient);
 
-    const dir = new THREE.DirectionalLight(0xfff0d8, 1.1);
-    dir.position.set(20, 40, 15);
+    const dir = new THREE.DirectionalLight(0xffe3bd, 2.35);
+    dir.position.set(36, 58, 28);
+    dir.target.position.set(0, 0, -28);
     dir.castShadow = true;
-    dir.shadow.mapSize.set(1024, 1024);
-    dir.shadow.camera.near = 1;
-    dir.shadow.camera.far = 120;
-    dir.shadow.camera.left = -60;
-    dir.shadow.camera.right = 60;
-    dir.shadow.camera.top = 60;
-    dir.shadow.camera.bottom = -60;
-    this.scene.add(dir);
+    dir.shadow.mapSize.set(2048, 2048);
+    dir.shadow.camera.near = 0.5;
+    dir.shadow.camera.far = 180;
+    dir.shadow.camera.left = -82;
+    dir.shadow.camera.right = 82;
+    dir.shadow.camera.top = 82;
+    dir.shadow.camera.bottom = -82;
+    dir.shadow.bias = -0.00035;
+    dir.shadow.normalBias = 0.026;
+    this.scene.add(dir, dir.target);
     this.sun = dir;
+
+    const fill = new THREE.DirectionalLight(0x7fa7c3, 0.45);
+    fill.position.set(-30, 22, -40);
+    this.scene.add(fill);
+    this.fillLight = fill;
   }
 
   /** Construct (but do not load) both zones with their quest wiring. */
@@ -346,6 +377,7 @@ export class Game {
       for (let i = list.length - 1; i >= 0; i--) {
         const z = list[i];
         if (!z.alive && z.state === 'DEAD' && z._deathT <= 0) {
+          if (typeof z.dispose === 'function') z.dispose();
           zone.group.remove(z.group);
           list.splice(i, 1);
         }
@@ -447,6 +479,7 @@ export class Game {
       const dz = pp.z - p.mesh.position.z;
       if (dx * dx + dz * dz <= 1.4 * 1.4) {
         this._grantPickup(p);
+        AssetFactory.disposeObject3D(p.mesh);
         zone.group.remove(p.mesh);
         zone.pickups.splice(i, 1);
       }
@@ -611,6 +644,7 @@ export class Game {
     if (zone && zone.pickups) {
       for (let i = zone.pickups.length - 1; i >= 0; i--) {
         if (zone.pickups[i].type === 'ingredient') {
+          AssetFactory.disposeObject3D(zone.pickups[i].mesh);
           zone.group.remove(zone.pickups[i].mesh);
           zone.pickups.splice(i, 1);
         }
@@ -671,6 +705,8 @@ export class Game {
       kills: this.kills,
       zone: this.activeZone ? this.activeZone.id : this.zoneName,
       ingredients: this.quest ? this.quest.ingredients : 0,
+      visualAssets: window.__BOOTSTRAP__ ? window.__BOOTSTRAP__.assets : undefined,
+      visualAssetDetails: window.__BOOTSTRAP__ ? window.__BOOTSTRAP__.assetDetails : undefined,
     };
   }
 
@@ -678,9 +714,17 @@ export class Game {
     this._running = false;
     if (this._rafId) cancelAnimationFrame(this._rafId);
     window.removeEventListener('resize', this._onResize);
+    if (this.activeZone) {
+      this.activeZone.unload(this.scene);
+      this.activeZone = null;
+    }
     if (this.player) this.player.dispose();
     if (this.input) this.input.dispose();
-    if (this.renderer) this.renderer.dispose();
+    if (this._skyTexture) this._skyTexture.dispose();
+    if (this.renderer) {
+      this.renderer.dispose();
+      if (this.renderer.domElement.parentNode) this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+    }
   }
 }
 

@@ -1,4 +1,4 @@
-// Zombie: procedural mesh + a small AI state machine.
+// Zombie: animated local model (with procedural fallback) + a small AI state machine.
 //
 // States: IDLE -> WANDER -> CHASE -> ATTACK -> DEAD. The zombie senses the
 // player within a radius, walks toward them (with light separation from other
@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { AssetFactory } from '../assets/AssetFactory.js';
+import { CharacterAnimator } from './CharacterAnimator.js';
 
 export const ZombieState = {
   IDLE: 'IDLE',
@@ -52,6 +53,13 @@ export class Zombie {
     this._growlT = 2 + Math.random() * 4;
     this._deathT = 0;
 
+    this._animator = new CharacterAnimator(this.group, {
+      idle: 'Zombie_Idle',
+      walk: 'Zombie_Walk_Root',
+      attack: ['Zombie_Skill', 'Zombie_EnemySpotted'],
+    }, { timeScale: 0.86 + Math.random() * 0.22 });
+    this._animator.play('idle', { phase: Math.random(), fade: 0 });
+
     this._wanderDir = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
   }
 
@@ -66,6 +74,7 @@ export class Zombie {
     this.alive = false;
     this.state = ZombieState.DEAD;
     this._deathT = 1.2;
+    this._animator.pause();
     if (this.audio) this.audio.playSfx('death');
   }
 
@@ -140,14 +149,27 @@ export class Zombie {
     }
 
     const spd = this.state === ZombieState.CHASE ? this.speed : this.speed * 0.4;
-    if (move.lengthSq() > 0) {
+    const isMoving = move.lengthSq() > 0;
+    if (isMoving) {
       myPos.x += move.x * spd * dt;
       myPos.z += move.z * spd * dt;
-      // Face the movement direction.
+      // Face the movement direction. Character visuals are normalized to +Z.
       this.group.rotation.y = Math.atan2(move.x, move.z);
-      // Simple walk bob on the legs for a little life.
+    }
+
+    if (this._animator.enabled) {
+      if (this.state === ZombieState.ATTACK) {
+        this._animator.play('attack', { timeScale: 1.05 });
+      } else if (isMoving) {
+        this._animator.play('walk', { timeScale: this.state === ZombieState.CHASE ? 1.08 : 0.72 });
+      } else {
+        this._animator.play('idle');
+      }
+      this._animator.update(dt);
+    } else if (isMoving) {
+      // Preserve the original limb contract for procedural fallback models.
       const parts = this.group.userData.parts;
-      if (parts) {
+      if (parts && parts.legL && parts.legR) {
         const bob = Math.sin(performance.now() * 0.008) * 0.4;
         parts.legL.rotation.x = bob;
         parts.legR.rotation.x = -bob;
@@ -161,6 +183,11 @@ export class Zombie {
     }
 
     return true;
+  }
+
+  dispose() {
+    if (this._animator) this._animator.dispose();
+    AssetFactory.disposeObject3D(this.group);
   }
 }
 

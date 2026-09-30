@@ -6,9 +6,10 @@ through the infested streets with a knife and a scavenged pistol, help the last
 survivors build a cure, and finally board a helicopter to spread that cure across
 the world.
 
-It runs **entirely offline** as a static site: no build step, no bundler, no npm,
-no external assets. Every mesh, texture, and sound is generated procedurally in
-code, and three.js itself is vendored locally.
+It runs **entirely offline at runtime** as a static site: no build step, no
+bundler, no npm, and no CDN or remote asset requests. Creative Commons-licensed
+character GLBs (CC BY and CC0) and their three.js loaders are vendored locally; the terrain/facade PBR-style
+textures and all sound effects are generated procedurally in the browser.
 
 ## Gameplay preview
 
@@ -111,9 +112,15 @@ restart button.
   gravity, circular collision) with health and a damage vignette.
 - Weapon system with a **knife -> pistol** progression: melee cone hit test and gun
   hitscan (raycast), ammo, reload, muzzle/swing feedback.
-- Zombie AI (idle / wander / chase / attack / die) with contact damage, separation,
-  and death cleanup.
-- Friendly, scientist, and hostile NPCs; dialogue and quest hooks; all killable.
+- Zombie AI (idle / wander / chase / attack / die) driving a textured, animated
+  hazmat-zombie model, with varied phase/scale/tint, contact damage, separation,
+  procedural fallback, and death cleanup.
+- Friendly, scientist, and hostile NPCs using a CC0 anatomical human armature with
+  varied skin/hair/face treatment, layered modern role clothing, and manually driven
+  idle/walk/attack bone animation; all remain killable.
+- Richer generated environments: soil/asphalt/concrete PBR-style surfaces, marked
+  roads and sidewalks, a medical compound/helipad, detailed facade/roof materials,
+  and recognizable cars, streetlights, trees, rubble, props, and helicopter.
 - Two modular zones: **Odisha City** (room -> city, research center, ingredients)
   and the **Medical Facility** (delivery + helicopter finale), with zone travel.
 - A `QuestManager` driving the full ordered objective flow above.
@@ -128,29 +135,40 @@ restart button.
 
 - A true open world spanning the whole planet or many countries (see the scope
   note below) - the slice ships one city plus one travel destination.
-- Real downloaded 3D models, textures, and audio (everything is procedural; see the
-  no-internet note).
+- Additional character, prop, weapon, and audio libraries beyond the two bundled
+  character assets and generated environment/audio systems shipped here.
 - Networking / multiplayer / accounts / persistence / save games.
 - Deep RPG systems (leveling, inventory management beyond weapons/ammo/medkits,
   crafting, skill trees), advanced pathfinding, and mobile/touch controls.
 
 ---
 
-## 5. No-internet / procedural assets
+## 5. Offline assets and local preload
 
-This project was built and runs in an environment with **no external network
-access**, so it depends on nothing that would need to be downloaded at load time:
+The game performs **zero external-origin runtime requests**. Everything needed by
+the static site is committed in the repository and served from the same origin:
 
-- **All game assets are generated procedurally in code.** Geometry is built from
-  three.js primitives (boxes, cylinders, spheres, planes) in
-  `js/assets/AssetFactory.js`; textures are drawn at runtime onto a `<canvas>` and
-  used as `CanvasTexture`; all sound effects are synthesized live with the **Web
-  Audio API** (oscillators + filtered noise) in `js/core/AudioManager.js`. There are
-  no image, model, or audio files to fetch.
-- **three.js is vendored locally.** three.js **r160** is committed under
-  [`vendor/three/`](vendor/three/) (`build/three.module.js`,
-  `build/three.module.min.js`, and `examples/jsm/controls/PointerLockControls.js`)
-  and loaded through the import map in `index.html`. Nothing is pulled from a CDN.
+- **Characters are bundled local glTF assets.** The animated
+  [`zombie-hazmat.glb`](assets/models/zombie-hazmat.glb) and rigged CC0
+  [`male-base-mesh.glb`](assets/models/male-base-mesh.glb) files preload before
+  `Game` construction. The human base has no embedded clips; the runtime drives
+  additive idle, walk, and attack poses directly through its armature and layers
+  role clothing and face/hair details onto each uniquely owned instance.
+  `GLTFLoader`, `SkeletonUtils`, and the Meshopt decoder are vendored at the
+  matching three.js r160 revision. If either GLB cannot load, a synchronous
+  procedural humanoid fallback keeps the game playable instead of leaving a
+  blank screen. `debugState().visualAssetDetails.human` exposes both the load
+  status and `male-base-mesh.glb` source name for browser verification.
+- **Environment surfaces remain procedural.** Soil, asphalt, concrete, walls,
+  facades, bump maps, and roughness maps are drawn deterministically onto canvas
+  textures in `js/assets/AssetFactory.js`. Sound effects are synthesized with the
+  **Web Audio API** in `js/core/AudioManager.js`.
+- **three.js is vendored locally.** three.js **r160** and all required support
+  modules live under [`vendor/three/`](vendor/three/) and resolve through the
+  import map in `index.html`. Nothing is pulled from a CDN.
+
+The model creators, source links, licenses, and runtime treatment are documented
+in [`assets/models/CREDITS.md`](assets/models/CREDITS.md).
 
 ---
 
@@ -189,17 +207,22 @@ logic.
    so the player can travel there. If it should advance the quest, wire its callbacks
    into `this.quest.handleEvent(...)` the same way the existing zones do.
 
-**Swap procedural assets for real models/textures:**
+**Swap or add visual assets:**
 
-All meshes and textures come from the `AssetFactory` API
-(`makeGround`, `makeBuilding`, `makeZombie`, `makeNPC`, `makePickup`,
-`makePlayerViewmodel`, `makeProp`, `makeCanvasTexture`, etc.) in
-`js/assets/AssetFactory.js`. Because the rest of the game only ever calls these
-factory methods, you can replace their bodies to load real downloaded models
-(e.g. glTF via `GLTFLoader`) and image textures (`TextureLoader`) **without
-touching game logic** - keep the same method names and returned object shapes
-(a `THREE.Object3D`/`Group`, with the same `userData` such as `parts` and `rotor`
-that the entities animate) and everything else keeps working.
+Character models are preloaded once by `js/assets/ModelLibrary.js`, then cloned
+synchronously behind the `AssetFactory` API (`makeZombie`, `makeNPC`,
+`makePlayerViewmodel`, etc.). To replace a bundled character, update the local
+manifest and preserve each factory's returned object shape: ground-pivot groups,
+local +Z forward, `userData.parts` for zombies, `userData.kind` for NPCs, the
+identity viewmodel wrapper, and `userData.rotor` for the helicopter. Skinned
+instances use `SkeletonUtils.clone` plus per-instance geometry/material ownership,
+so zone disposal cannot invalidate the cached templates. Keep new files local to
+preserve the no-runtime-network guarantee.
+
+Generated environment materials and props remain in
+`js/assets/AssetFactory.js`. New terrain/facade textures should use the existing
+color-space, anisotropy, repeat-clone, and disposal helpers rather than mutating a
+shared texture's repeat state.
 
 ---
 
@@ -207,7 +230,16 @@ that the entities animate) and everything else keeps working.
 
 - **three.js** (r160) - MIT License. Copyright (c) 2010-present three.js authors.
   The full license text is included with the vendored copy at
-  [`vendor/three/LICENSE`](vendor/three/LICENSE). See <https://threejs.org>.
+  [`vendor/three/LICENSE`](vendor/three/LICENSE). See [threejs.org](https://threejs.org/).
+- **Zombie Hazmat** by [LxNazarov](https://sketchfab.com/LxNazarov), from the
+  [original Sketchfab model](https://sketchfab.com/3d-models/zombie-hazmat-49b3b4307f6a4d2386fdb02354158d04),
+  licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- **Male Base Mesh** by [orange-juice-games](https://orange-juice-games.itch.io/),
+  from the [original Male Base Mesh page](https://orange-juice-games.itch.io/male-base-mesh)
+  via the [Godot 3D Male Base Mesh repository](https://github.com/BoQsc/Godot-3D-Male-Base-Mesh),
+  dedicated to the public domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 
-All other code and procedurally generated assets in this repository were created
-for this project.
+See [`assets/models/CREDITS.md`](assets/models/CREDITS.md) for exact local files,
+source-file links, attribution, licenses, and runtime modifications. All remaining
+project-specific code, procedural environment visuals, and synthesized audio were
+created for this project.

@@ -14,6 +14,7 @@
 
 import * as THREE from 'three';
 import { AssetFactory } from '../assets/AssetFactory.js';
+import { CharacterAnimator } from './CharacterAnimator.js';
 
 export const NPCKind = {
   FRIENDLY: 'friendly',
@@ -66,6 +67,13 @@ export class NPC {
     this._wanderDir = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
     this._wanderT = 1 + Math.random() * 3;
 
+    this._animator = new CharacterAnimator(this.group, {
+      idle: this.hostile ? ['fight_idle', 'idle'] : 'idle',
+      walk: 'run',
+      attack: ['fight_punch', 'fight_kick'],
+    }, { timeScale: 0.92 + Math.random() * 0.16 });
+    this._animator.play('idle', { phase: Math.random(), fade: 0 });
+
     // Death collapse timer.
     this._deathT = 0;
   }
@@ -95,6 +103,7 @@ export class NPC {
   _die() {
     this.alive = false;
     this._deathT = 1.2;
+    this._animator.pause();
     if (this.audio) this.audio.playSfx('death');
     this.onDeath(this);
   }
@@ -131,10 +140,19 @@ export class NPC {
       dist = toPlayer.length();
     }
 
+    let animationState;
     if (this.hostile) {
-      this._updateHostile(dt, player, toPlayer, dist, myPos);
+      animationState = this._updateHostile(dt, player, toPlayer, dist, myPos);
     } else {
-      this._updateFriendly(dt, myPos);
+      animationState = this._updateFriendly(dt, myPos);
+    }
+
+    if (this._animator.enabled) {
+      const timeScale = animationState === 'walk'
+        ? (this.hostile ? 1.05 : 0.58)
+        : (animationState === 'attack' ? 1.08 : 1);
+      this._animator.play(animationState, { timeScale });
+      this._animator.update(dt);
     }
   }
 
@@ -144,14 +162,16 @@ export class NPC {
         this._attackCd = this.attackCooldown;
         player.takeDamage(this.attackDamage);
       }
-      return;
+      return 'attack';
     }
     if (dist <= this.senseRadius && dist > 0.0001) {
       const move = _v2.copy(toPlayer).normalize();
       myPos.x += move.x * this.speed * dt;
       myPos.z += move.z * this.speed * dt;
       this.group.rotation.y = Math.atan2(move.x, move.z);
+      return 'walk';
     }
+    return 'idle';
   }
 
   _updateFriendly(dt, myPos) {
@@ -171,6 +191,12 @@ export class NPC {
     myPos.x += move.x * this.speed * dt;
     myPos.z += move.z * this.speed * dt;
     if (move.lengthSq() > 0.0001) this.group.rotation.y = Math.atan2(move.x, move.z);
+    return move.lengthSq() > 0.0001 ? 'walk' : 'idle';
+  }
+
+  dispose() {
+    if (this._animator) this._animator.dispose();
+    AssetFactory.disposeObject3D(this.group);
   }
 }
 

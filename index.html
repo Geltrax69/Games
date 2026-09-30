@@ -47,8 +47,19 @@
     <div id="message-toast" class="hidden"></div>
   </div>
 
+  <!-- Local model preload state; stays meaningful even on load failure. -->
+  <div id="loading-screen" class="overlay-screen loading-screen">
+    <div class="overlay-inner">
+      <p class="loading-kicker">ODISHA OUTBREAK</p>
+      <h1 id="loading-title">PREPARING SURVIVORS</h1>
+      <div id="loading-track"><div id="loading-fill"></div></div>
+      <p id="loading-detail">Preparing local character assets</p>
+      <p class="loading-note">Bundled assets only &middot; no runtime internet required</p>
+    </div>
+  </div>
+
   <!-- Start screen -->
-  <div id="start-screen" class="overlay-screen">
+  <div id="start-screen" class="overlay-screen hidden">
     <div class="overlay-inner">
       <h1>ZOMBIE APOCALYPSE</h1>
       <h2>Odisha Outbreak</h2>
