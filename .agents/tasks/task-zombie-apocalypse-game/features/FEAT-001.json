@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Scaffold the static three.js project, the procedural AssetFactory, the Game state machine + render loop, input handling, and the headless verification harness. This is the foundation every later feature builds on. three.js r160 is ALREADY vendored at vendor/three/; do NOT re-download or modify it. No build step, no npm.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create index.html at repo root with: an import map mapping \"three\" -> ./vendor/three/build/three.module.js and \"three/addons/\" -> ./vendor/three/examples/jsm/ ; a full-window canvas/container; overlay DOM for HUD, start screen, win screen, lose screen; and <script type=\"module\" src=\"./js/main.js\">.",
     "Create css/style.css: full-viewport layout, crosshair, HUD panels (health bar, ammo, weapon, objective text, message toast), and start/win/lose overlay screens.",
