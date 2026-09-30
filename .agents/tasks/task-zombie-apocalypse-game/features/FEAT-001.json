@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Scaffold the static three.js project, the procedural AssetFactory, the Game state machine + render loop, input handling, and the headless verification harness. This is the foundation every later feature builds on. three.js r160 is ALREADY vendored at vendor/three/; do NOT re-download or modify it. No build step, no npm.",
+  "status": "pending",
+  "steps": [
+    "Create index.html at repo root with: an import map mapping \"three\" -> ./vendor/three/build/three.module.js and \"three/addons/\" -> ./vendor/three/examples/jsm/ ; a full-window canvas/container; overlay DOM for HUD, start screen, win screen, lose screen; and <script type=\"module\" src=\"./js/main.js\">.",
+    "Create css/style.css: full-viewport layout, crosshair, HUD panels (health bar, ammo, weapon, objective text, message toast), and start/win/lose overlay screens.",
+    "Create js/main.js: import Game, instantiate it, call start(); expose window.__GAME__ = game; install error capture BEFORE game init: window.__consoleErrors=[]; window.addEventListener('error', e=>window.__consoleErrors.push(String(e.message||e.error))); window.addEventListener('unhandledrejection', e=>window.__consoleErrors.push('promise:'+String(e.reason))); wrap/patch console.error to also push into window.__consoleErrors.",
+    "Create js/core/Game.js: a state machine with states START, PLAYING, PAUSED, WIN, LOSE. Set up THREE.Scene, PerspectiveCamera, WebGLRenderer (attach to container, handle resize), lighting (ambient + directional), a requestAnimationFrame loop using a clamped delta. Provide loadZone(zone) to swap the active zone, and a debugState() method returning {state, health, ammo, weapon, objectiveId, zombieCount, zone}. Stub player/zone with placeholders for now (a ground plane + a few boxes) so the scene renders.",
+    "Create js/core/Input.js: track WASD, Shift(run), Space, mouse buttons, number keys (1/2 weapon switch), E (interact), R (reload). Integrate PointerLockControls from 'three/addons/controls/PointerLockControls.js' for mouse-look; lock pointer on canvas click when PLAYING.",
+    "Create js/assets/AssetFactory.js: pure procedural asset builders returning THREE objects, with a stable API so real models can be swapped later. Include: makeCanvasTexture(drawFn,size) helper; makeGround(size), makeBuilding(w,h,d,style), makeZombie() (humanoid from primitives, greenish, exposes a group), makePlayerViewmodel(weaponType), makeKnifeMesh(), makeGunMesh(), makePickup(type), makeNPC(kind), makeProp(kind). Keep materials/vertex counts modest for performance.",
+    "Create js/core/AudioManager.js: Web Audio API wrapper. Lazily create AudioContext on first user gesture. Provide playSfx(name) for at least: gunshot (noise burst), knife swing (short filtered noise), zombie growl (low osc), hit, pickup, death, victory. No external audio files.",
+    "Run `node --check` on every js file. Then run the headless verification: serve with python3 http.server and load index.html in agent-browser, confirm window.__GAME__ exists, debugState() returns an object, and window.__consoleErrors is empty. Save a screenshot to /projects/sandbox/.kiro/artifacts/screenshots/.",
+    "git add the new files (index.html, css/, js/, and the already-present vendor/three/) and commit with a conventional message like 'feat: scaffold three.js engine, asset factory, and verification harness'."
+  ],
+  "acceptance_criteria": [
+    "index.html loads with no console errors when served via python3 -m http.server and opened in agent-browser.",
+    "window.__GAME__ is defined and window.__GAME__.debugState() returns a JSON object with keys state, health, ammo, weapon, objectiveId, zombieCount, zone.",
+    "window.__consoleErrors is an empty array after load.",
+    "`node --check` passes for every .js file under js/.",
+    "The scene renders (a ground plane and placeholder geometry are visible in the screenshot).",
+    "three.js is loaded from the vendored copy via the import map (no network requests to CDNs)."
+  ],
+  "verification": [
+    "for f in $(find js -name '*.js'); do node --check \"$f\" || echo FAIL:$f; done",
+    "cd /projects/sandbox/Games && python3 -m http.server 8099 >/tmp/h.log 2>&1 & SRV=$!; sleep 2; agent-browser --session v1 open 'http://localhost:8099/index.html'; agent-browser --session v1 wait 3000; agent-browser --session v1 eval 'JSON.stringify(window.__GAME__?window.__GAME__.debugState():\"no-game\")'; agent-browser --session v1 eval '(window.__consoleErrors||[]).join(\" | \")||\"NO_ERRORS\"'; agent-browser --session v1 screenshot /projects/sandbox/.kiro/artifacts/screenshots/feat001-scene.png; kill $SRV"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

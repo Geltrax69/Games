@@ -1,0 +1,32 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Implement the core moment-to-moment gameplay: first-person player movement + camera, health, the weapon system with knife->gun progression (melee + ranged with ammo/reload), zombie AI (wander/chase/attack/die), combat resolution, weapon/ammo pickups, and the live HUD. Depends on FEAT-001 scaffold.",
+  "status": "pending",
+  "steps": [
+    "Create js/entities/Player.js: FP controller using PointerLockControls object as the camera rig. WASD movement relative to look direction, Shift to run, gravity + ground clamp, simple AABB/sphere collision against zone colliders. Fields: health (0-100), maxHealth, inventory (weapons owned), currentWeapon, damage/hit feedback (screen flash + audio). Methods: update(dt,input,zone), takeDamage(n) (LOSE when health<=0), heal(n), giveWeapon(type), switchWeapon(index). Attach a first-person weapon viewmodel from AssetFactory.",
+    "Create js/entities/Weapon.js: model both weapons via a small config. Knife: melee, short range, arc/cone hit test against zombies+NPCs in front, cooldown, swing animation + swing sfx. Gun: ranged hitscan via THREE.Raycaster from camera, ammo + reserve ammo, reload, muzzle flash, gunshot sfx. attack(scene, targets) returns hit results; expose ammo/clip for HUD. Player starts owning ONLY the knife (per story: 'just a small knife in her room').",
+    "Create js/entities/Zombie.js: mesh from AssetFactory.makeZombie(); state machine IDLE/WANDER/CHASE/ATTACK/DEAD. Detects player within a radius, paths straight toward player (with simple separation to avoid perfect stacking), attacks on contact dealing damage on a cooldown, has health, plays growl occasionally, and on death plays death sfx + is removed/ragdoll-collapsed and counted toward kills. Provide update(dt, player) and takeDamage(n).",
+    "Wire combat in Game loop: player attack -> Weapon queries nearby zombies/NPCs -> applies damage -> zombies die and increment kill count. Zombies damage player on contact. Maintain an array of active zombies per zone.",
+    "Add pickups: AssetFactory.makePickup('gun'|'ammo'|'medkit'); when player is within range and presses E (or on touch), grant the item (gun unlocks ranged weapon and enables knife->gun progression; ammo adds rounds; medkit heals), play pickup sfx, remove pickup, show HUD toast.",
+    "Create js/ui/HUD.js: bind DOM from index.html. Render health bar, current weapon name + icon, ammo/clip (hidden for knife), current objective text, and a transient message/toast API showMessage(text,ms). Update every frame from Game state. Also render a damage vignette when hit and a death/again prompt hook.",
+    "Update Game.debugState() to report real player.health, current weapon, ammo, and live zombieCount. Add a headless test hook: window.__GAME__.test = { spawnZombie(), attack(), killAllZombies(), giveGun() } so the verification harness can exercise combat without real mouse input.",
+    "Run node --check on all files, then headless-verify: load game, call window.__GAME__.test.spawnZombie() then window.__GAME__.test.attack()/killAllZombies() and giveGun(), assert zombieCount decreases, weapon switches to gun after giveGun+switch, and no console errors. Screenshot to artifacts.",
+    "git add and commit: 'feat: player movement, weapon progression (knife->gun), zombie AI, combat, pickups, HUD'."
+  ],
+  "acceptance_criteria": [
+    "Player moves with WASD and looks with the mouse (pointer lock) without console errors.",
+    "Player starts with only a knife; picking up the gun unlocks ranged combat and switching weapons (keys 1/2) works.",
+    "Knife melee and gun hitscan both damage and kill zombies; killed zombies are removed and the kill/zombie count updates in debugState().",
+    "Zombies chase the player and reduce player health on contact; health reaching 0 transitions Game state to LOSE.",
+    "HUD shows health, current weapon, ammo (for gun), and current objective, and updates live.",
+    "window.__GAME__.test hooks (spawnZombie, attack, killAllZombies, giveGun) work headlessly and window.__consoleErrors stays empty.",
+    "node --check passes for all js files."
+  ],
+  "verification": [
+    "for f in $(find js -name '*.js'); do node --check \"$f\" || echo FAIL:$f; done",
+    "cd /projects/sandbox/Games && python3 -m http.server 8099 >/tmp/h.log 2>&1 & SRV=$!; sleep 2; agent-browser --session v2 open 'http://localhost:8099/index.html'; agent-browser --session v2 wait 3000; agent-browser --session v2 eval 'window.__GAME__.test.spawnZombie(); window.__GAME__.debugState().zombieCount'; agent-browser --session v2 eval 'window.__GAME__.test.giveGun(); window.__GAME__.test.killAllZombies(); JSON.stringify(window.__GAME__.debugState())'; agent-browser --session v2 eval '(window.__consoleErrors||[]).join(\" | \")||\"NO_ERRORS\"'; agent-browser --session v2 screenshot /projects/sandbox/.kiro/artifacts/screenshots/feat002-combat.png; kill $SRV"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

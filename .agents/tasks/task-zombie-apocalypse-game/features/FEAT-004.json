@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-004",
+  "type": "docs",
+  "description": "Polish and document: wire audio cues across all events, tune balance, add the start screen with story intro and controls, ensure graceful pause/pointer-unlock, and write a comprehensive README covering run instructions, controls, story flow, what was built vs deferred, the no-internet/procedural-assets note, the single-player-vs-MMORPG scope note, and how to extend with new zones/real assets. Depends on FEAT-003.",
+  "status": "pending",
+  "steps": [
+    "Audit AudioManager usage: ensure gunshot, knife swing, zombie growl, hit, pickup, player-damage, death, victory, and objective-complete cues actually fire from the relevant systems. Guard AudioContext creation behind a user gesture (the Start button / canvas click) so no autoplay errors occur headless.",
+    "Add a Start screen overlay: short story intro (protagonist wakes in Odisha during a zombie outbreak; find a cure) + a controls legend (WASD move, Shift run, mouse look, click to fire / left-click knife, 1/2 switch weapon, R reload, E interact, Esc pause). Clicking Start begins PLAYING and locks the pointer. Handle Esc to pause and release pointer lock without errors.",
+    "Balance pass: tune player/zombie health, damage, spawn counts, weapon damage/ammo, and movement speeds so the vertical slice is completable and not trivially fatal. Keep zombie counts modest for browser performance.",
+    "Create README.md at repo root covering: (1) How to run — `cd Games && python3 -m http.server 8000` then open http://localhost:8000 (note: must be served, not opened via file:// because of ES module import maps); (2) Controls; (3) Story/objective flow end to end; (4) What was built vs deferred; (5) NO-INTERNET note: all assets are procedurally generated in code (three.js primitives, CanvasTexture, Web Audio) and three.js r160 is vendored locally under vendor/three/ (with its LICENSE) because the sandbox has no external network; (6) SCOPE note: this is a SINGLE-PLAYER game, not a true MMORPG (servers/accounts/massively-multiplayer are out of scope for a static site), and it implements one starting city (Odisha) plus one travel destination rather than the whole planet; (7) How to EXTEND: add a new Zone subclass under js/world/zones/ and register it, and swap procedural assets for real downloaded models/textures behind the AssetFactory API without touching game logic; (8) Credit three.js (MIT) and note vendor/three/LICENSE.",
+    "Final full-loop headless verification: node --check all files; serve and load; run through the story via test hooks; confirm zero console errors; capture a final screenshot set (start screen, city, combat, medical facility, win) into /projects/sandbox/.kiro/artifacts/screenshots/.",
+    "git add README.md and any changed files and commit: 'docs: add README, audio cues, start screen, and balance polish'."
+  ],
+  "acceptance_criteria": [
+    "README.md exists at repo root and covers run instructions, controls, story flow, built-vs-deferred, the no-internet/procedural-assets note, the single-player-vs-MMORPG scope note, and extension instructions for new zones and real assets.",
+    "A start screen with story intro + controls shows on load; clicking Start enters PLAYING; Esc pauses and releases pointer lock without console errors.",
+    "Audio cues fire for the key events and no autoplay/AudioContext errors appear in window.__consoleErrors.",
+    "The full story slice is completable (WIN reachable) and death produces LOSE, both via normal play and via test hooks.",
+    "node --check passes for all js files and window.__consoleErrors is empty across a full verification run.",
+    "three.js MIT license is credited and vendor/three/LICENSE is present."
+  ],
+  "verification": [
+    "for f in $(find js -name '*.js'); do node --check \"$f\" || echo FAIL:$f; done",
+    "test -f README.md && grep -iq 'python3 -m http.server' README.md && grep -iq 'single-player' README.md && grep -iq 'procedural' README.md && echo README_OK",
+    "cd /projects/sandbox/Games && python3 -m http.server 8099 >/tmp/h.log 2>&1 & SRV=$!; sleep 2; agent-browser --session v4 open 'http://localhost:8099/index.html'; agent-browser --session v4 wait 3000; agent-browser --session v4 eval 'JSON.stringify(window.__GAME__.debugState())'; agent-browser --session v4 eval 'window.__GAME__.test.collectAllIngredients(); window.__GAME__.test.travelTo(\"MedicalFacility\"); window.__GAME__.test.triggerWin(); window.__GAME__.debugState().state'; agent-browser --session v4 eval '(window.__consoleErrors||[]).join(\" | \")||\"NO_ERRORS\"'; agent-browser --session v4 screenshot /projects/sandbox/.kiro/artifacts/screenshots/feat004-final.png; kill $SRV"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

@@ -1,0 +1,33 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Build the world and story: a modular Zone system, the starting Odisha/Orissa city zone (wake in a room -> exit into zombie-infested city), a second travel destination (Medical Facility), friendly + hostile NPCs (killable), the cure-storyline quest flow, zone travel, and the full win/lose states with the helicopter finale. Depends on FEAT-002.",
+  "status": "pending",
+  "steps": [
+    "Create js/world/Zone.js: base class defining an interface load(scene) / unload(scene) / update(dt) / getColliders() / getSpawns() / getExits(). A zone owns its terrain, buildings, props, zombie spawn points, NPC placements, pickups, and named exit trigger volumes that request travel to another zone. Built entirely from AssetFactory primitives.",
+    "Create js/world/zones/OdishaCity.js extends Zone: an enclosed starting ROOM (bed, door) where the player wakes with the knife; a door/exit that opens into a city block of Odisha (streets, low buildings, a temple-like landmark, props) populated with wandering zombies. Place: a gun+ammo pickup to find, 2-3 friendly survivor NPCs (one hints at the research center), a hostile NPC or two, and a RESEARCH CENTER building the player enters/interacts with to receive the cure quest and identify needed ingredients. Include ingredient pickup(s) to collect here. An exit trigger lets the player 'travel north' to the Medical Facility once ingredients are collected.",
+    "Create js/world/zones/MedicalFacility.js extends Zone: a distinct second location (the mass medical facility) reachable by travel. Contains the lead scientist NPC who accepts the collected ingredients, more zombies to fight through, and a final ingredient/step. Completing delivery triggers the finale: board a helicopter (interactable) to 'spread the cure' -> Game WIN state.",
+    "Create js/entities/NPC.js: friendly and hostile variants from AssetFactory.makeNPC(kind). Friendly: idle/wander, interact (E) to show dialogue lines and advance quest state (give quest, accept ingredients, hint). Hostile: attacks the player like a zombie. ALL NPCs are killable by the player's weapons (per user request); killing a quest-critical friendly NPC should be allowed but surfaced (e.g., message + the quest can still be completed via an alternate/self-serve interaction or clearly marked as a soft-fail) so the game never soft-locks.",
+    "Create js/quest/QuestManager.js: an ordered objective flow with ids and human-readable text driving the HUD objective line. Flow: OBJ_WAKE (leave the room) -> OBJ_SURVIVE (kill N zombies / reach the street) -> OBJ_FIND_GUN (pick up gun) -> OBJ_MEET_SURVIVORS (talk to a survivor) -> OBJ_RESEARCH (enter research center, get cure task) -> OBJ_COLLECT (collect ingredient pickups in Odisha) -> OBJ_TRAVEL (use exit to Medical Facility) -> OBJ_DELIVER (give ingredients to scientist) -> OBJ_FINALE (board helicopter) -> WIN. Each step listens to game events (kills, pickups, interactions, zone changes) and advances automatically. Expose current objective in debugState().",
+    "Wire zone travel in Game: when the player enters an exit trigger and prerequisites are met, unload current zone, load target zone, reposition player at the target spawn, and update the quest. Update debugState().zone accordingly.",
+    "Implement WIN and LOSE screens (from index.html overlays): LOSE on player death with a Restart button; WIN after the helicopter finale with an ending message and Restart. Restart should reset the game to a fresh Odisha start.",
+    "Extend window.__GAME__.test hooks for headless verification: travelTo(zoneName), advanceObjective(), interactNearest(), collectAllIngredients(), triggerWin(), triggerLose(). These let the harness walk the full story without manual input.",
+    "Run node --check on all files, then headless-verify the full loop: start in Odisha (debugState.zone==='OdishaCity', objective===OBJ_WAKE), use test hooks to progress objectives, collect ingredients, travelTo('MedicalFacility') (zone updates), deliver, triggerWin -> debugState.state==='WIN'. Also verify triggerLose -> 'LOSE'. Confirm window.__consoleErrors empty throughout. Screenshots of both zones + win screen to artifacts.",
+    "git add and commit: 'feat: modular zones (Odisha city + medical facility), NPCs, cure quest flow, travel, win/lose finale'."
+  ],
+  "acceptance_criteria": [
+    "Game starts in an enclosed room in the OdishaCity zone with objective OBJ_WAKE; exiting leads to the zombie-infested city.",
+    "Friendly and hostile NPCs exist; the player can talk to friendly NPCs (advancing the quest) and can also kill any NPC with their weapons without soft-locking the game.",
+    "A research center gives the cure quest; ingredient pickups can be collected; the objective/HUD advances through the defined flow.",
+    "Traveling to the MedicalFacility zone works (debugState().zone changes) and the player can deliver ingredients to the scientist NPC.",
+    "The helicopter finale sets Game state to WIN and shows the win screen; player death sets state to LOSE and shows the lose screen; Restart returns to a fresh Odisha start.",
+    "The QuestManager objective is reflected in debugState().objectiveId and the HUD objective text.",
+    "Full story loop is exercisable via window.__GAME__.test hooks with window.__consoleErrors empty and node --check passing."
+  ],
+  "verification": [
+    "for f in $(find js -name '*.js'); do node --check \"$f\" || echo FAIL:$f; done",
+    "cd /projects/sandbox/Games && python3 -m http.server 8099 >/tmp/h.log 2>&1 & SRV=$!; sleep 2; agent-browser --session v3 open 'http://localhost:8099/index.html'; agent-browser --session v3 wait 3000; agent-browser --session v3 eval 'JSON.stringify(window.__GAME__.debugState())'; agent-browser --session v3 eval 'window.__GAME__.test.collectAllIngredients(); window.__GAME__.test.travelTo(\"MedicalFacility\"); JSON.stringify(window.__GAME__.debugState())'; agent-browser --session v3 eval 'window.__GAME__.test.triggerWin(); window.__GAME__.debugState().state'; agent-browser --session v3 eval '(window.__consoleErrors||[]).join(\" | \")||\"NO_ERRORS\"'; agent-browser --session v3 screenshot /projects/sandbox/.kiro/artifacts/screenshots/feat003-story.png; kill $SRV"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
