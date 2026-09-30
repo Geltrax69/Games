@@ -1,7 +1,7 @@
 {
   "task_id": "task-zombie-apocalypse-game",
   "task_description": "Build a playable browser-based single-player 3D zombie-apocalypse game with three.js (vendored offline). Protagonist wakes in a room in Odisha, fights zombies with a knife then a gun, meets survivor NPCs, gets a cure quest from a research center, collects ingredients, travels to a medical facility, delivers the cure, and reaches a helicopter finale. Modular zone system, friendly+hostile+killable NPCs, HUD, win/lose. Single-player (not a true MMORPG) and one starting city + one travel zone, per the offline/static-site constraints. Runs via python3 -m http.server; all assets procedurally generated.",
-  "status": "pending",
+  "status": "in_progress",
   "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
   "blocked_reason": null
 }

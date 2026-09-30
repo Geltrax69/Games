@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zombie Apocalypse - Odisha</title>
+  <link rel="stylesheet" href="./css/style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/build/three.module.js",
+      "three/addons/": "./vendor/three/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- 3D render target -->
+  <div id="game-container"></div>
+
+  <!-- Crosshair -->
+  <div id="crosshair" class="hidden">+</div>
+
+  <!-- HUD overlay -->
+  <div id="hud" class="hidden">
+    <div id="hud-top-left">
+      <div id="health-wrap">
+        <span class="hud-label">HP</span>
+        <div id="health-bar"><div id="health-fill"></div></div>
+      </div>
+      <div id="weapon-wrap">
+        <span class="hud-label">WEAPON</span>
+        <span id="weapon-name">Knife</span>
+        <span id="ammo-count"></span>
+      </div>
+    </div>
+    <div id="hud-top-right">
+      <div id="objective-wrap">
+        <span class="hud-label">OBJECTIVE</span>
+        <span id="objective-text">Survive.</span>
+      </div>
+      <div id="zone-wrap">
+        <span class="hud-label">ZONE</span>
+        <span id="zone-name">-</span>
+      </div>
+    </div>
+    <div id="message-toast" class="hidden"></div>
+  </div>
+
+  <!-- Start screen -->
+  <div id="start-screen" class="overlay-screen">
+    <div class="overlay-inner">
+      <h1>ZOMBIE APOCALYPSE</h1>
+      <h2>Odisha Outbreak</h2>
+      <p>You wake up in your room. The streets outside are overrun.
+         Grab your knife, survive, and help find a cure.</p>
+      <p class="controls-hint">
+        WASD move &middot; Mouse look &middot; Shift run &middot; Space jump &middot;
+        1/2 switch weapon &middot; E interact &middot; R reload &middot; Click to attack
+      </p>
+      <button id="start-button" type="button">START</button>
+    </div>
+  </div>
+
+  <!-- Win screen -->
+  <div id="win-screen" class="overlay-screen hidden">
+    <div class="overlay-inner">
+      <h1>THE WORLD IS SAVED</h1>
+      <p>The cure spread across the planet. Humanity endures.</p>
+      <button id="win-restart-button" type="button">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <!-- Lose screen -->
+  <div id="lose-screen" class="overlay-screen hidden">
+    <div class="overlay-inner">
+      <h1>YOU DIED</h1>
+      <p>The infection claimed another. The world grows darker.</p>
+      <button id="lose-restart-button" type="button">TRY AGAIN</button>
+    </div>
+  </div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
