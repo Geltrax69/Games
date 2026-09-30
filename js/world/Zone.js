@@ -64,9 +64,53 @@ export class Zone {
     return this;
   }
 
-  /** Detach the zone from the scene. */
+  /** Detach the zone from the scene and free its GPU resources. */
   unload(scene) {
     if (scene) scene.remove(this.group);
+    this.dispose();
+  }
+
+  /**
+   * Release GPU resources owned by this zone. Traverses the group disposing
+   * every mesh geometry and material.
+   *
+   * IMPORTANT: textures are intentionally NOT disposed here. AssetFactory
+   * caches textures in a module-level map (keyed 'ground', 'building-*',
+   * 'crate', 'room-floor', ...) and hands the SAME texture object to meshes in
+   * both zones and to every rebuilt zone after a restart. Disposing a texture
+   * here would corrupt the copy still in use by the other zone (or by the next
+   * rebuild). Geometries and materials, by contrast, are created fresh per mesh
+   * and are safe to dispose. After dispose the zone must be rebuilt (_built is
+   * cleared) before it can be loaded again.
+   */
+  dispose() {
+    if (!this.group) return;
+    this.group.traverse((obj) => {
+      if (obj.geometry && typeof obj.geometry.dispose === 'function') {
+        obj.geometry.dispose();
+      }
+      const mat = obj.material;
+      if (mat) {
+        if (Array.isArray(mat)) {
+          for (const m of mat) { if (m && typeof m.dispose === 'function') m.dispose(); }
+        } else if (typeof mat.dispose === 'function') {
+          mat.dispose();
+        }
+      }
+    });
+    // The group's meshes now reference disposed geometries/materials; drop them
+    // and force a rebuild before this zone is loaded again.
+    this.group.clear();
+    // Clear the entity/collider bookkeeping so a rebuild (build() re-populates
+    // these) does not accumulate stale entries.
+    this.colliders = [];
+    this.zombies = [];
+    this.npcs = [];
+    this.pickups = [];
+    this.exits = [];
+    this.interactables = [];
+    this.spawns = [];
+    this._built = false;
   }
 
   _spawnInitialZombies() {

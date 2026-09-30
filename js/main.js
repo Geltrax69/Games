@@ -17,9 +17,16 @@ window.addEventListener('unhandledrejection', (e) => {
 // Known-benign messages that are NOT game errors: pointer lock requires a
 // trusted user gesture, which does not exist under headless/synthetic clicks.
 // These come from the browser / vendored controls, not from game logic.
+//
+// Keep this list TIGHT: match only the specific pointer-lock gesture-rejection
+// wording, not any message that merely mentions "pointer lock", so a future
+// regression surfacing through a pointer-lock code path is still reported to
+// the harness. Revisit whenever pointer-lock handling changes.
 const __benignPatterns = [
-  /Pointer Lock/i,
   /user gesture is required to request Pointer Lock/i,
+  /request(?:ed)? Pointer Lock without .*user gesture/i,
+  /pointer lock (?:was )?denied/i,
+  /Unable to use Pointer Lock/i,
 ];
 function __isBenign(msg) {
   return __benignPatterns.some((re) => re.test(msg));

@@ -25,10 +25,14 @@ export class OdishaCity extends Zone {
   constructor(opts = {}) {
     super({ id: 'OdishaCity', name: 'Odisha - City', audio: opts.audio });
     // Callbacks the Game wires so zone interactions drive the quest.
+    this.onLeaveRoom = opts.onLeaveRoom || (() => {});
     this.onEnterResearch = opts.onEnterResearch || (() => {});
     this.onTalkSurvivor = opts.onTalkSurvivor || (() => {});
     this.onCriticalNpcKilled = opts.onCriticalNpcKilled || (() => {});
     this.onMessage = opts.onMessage || (() => {});
+
+    // Fires onLeaveRoom once when the player first steps through the doorway.
+    this._leftRoom = false;
 
     // The player wakes inside the room.
     this.entryPoints = {
@@ -59,6 +63,9 @@ export class OdishaCity extends Zone {
     // Room sits centered on origin; doorway faces -Z into the city.
     this.group.add(room.group);
     for (const c of room.colliders) this.addCollider(c.x, c.z, c.radius);
+    // Doorway z (front -Z wall). The Game uses this to detect the player
+    // stepping out of the room and fire the OBJ_WAKE completion.
+    this.doorwayZ = room.doorway ? room.doorway.z : -ROOM_SIZE / 2;
   }
 
   _buildCity() {
@@ -209,6 +216,24 @@ export class OdishaCity extends Zone {
       { x: 10, z: -38 }, { x: -8, z: -48 }, { x: 16, z: -54 },
       { x: 0, z: -60 }, { x: -20, z: -22 },
     ];
+  }
+
+  /**
+   * Per-frame: run base zone logic, then detect the player crossing the
+   * doorway out of the starting room. The doorway is on the front (-Z) wall at
+   * z = doorwayZ; once the player passes south of it (smaller z) they have left
+   * the room, which completes OBJ_WAKE.
+   */
+  update(dt, ctx) {
+    super.update(dt, ctx);
+    if (this._leftRoom) return;
+    const player = ctx && ctx.player;
+    if (!player || !player.group) return;
+    const dz = this.doorwayZ != null ? this.doorwayZ : -ROOM_SIZE / 2;
+    if (player.group.position.z < dz - 0.5) {
+      this._leftRoom = true;
+      this.onLeaveRoom();
+    }
   }
 
   _placeExit() {

@@ -62,7 +62,9 @@ distribute a cure.
 
 The objective flow (shown live in the HUD) runs end to end:
 
-1. **OBJ_WAKE** - You wake in your room. Leave it and step into the city.
+1. **OBJ_WAKE** - You wake in your room. Walk out through the doorway into the
+   city; stepping through the doorway completes this objective (killing your
+   first zombie also clears it if you fight in the doorway).
 2. **OBJ_SURVIVE** - The streets are overrun. Kill a few zombies to clear a path.
 3. **OBJ_FIND_GUN** - A knife is not enough. Find the pistol dropped in the city.
 4. **OBJ_MEET_SURVIVORS** - Find other survivors and talk to one (press E).

@@ -128,6 +128,7 @@ export class Game {
     this.zones = {
       OdishaCity: new OdishaCity({
         audio: this.audio,
+        onLeaveRoom: () => this.quest.handleEvent({ type: 'left_room' }),
         onEnterResearch: () => this.quest.handleEvent({ type: 'enter_research' }),
         onTalkSurvivor: () => this.quest.handleEvent({ type: 'talk_survivor' }),
         onCriticalNpcKilled: (role) => this.quest.handleEvent({ type: 'critical_npc_killed', role }),
@@ -577,21 +578,32 @@ export class Game {
    * ingredient pickups exist, then grants them.
    */
   _collectAllIngredients() {
-    // Make sure the earlier objectives are satisfied so OBJ_COLLECT is active.
+    // Drive the earlier objectives through the SAME real game events a player
+    // triggers, so this hook cannot silently route around a broken step.
     const q = this.quest;
-    q.kills = Math.max(q.kills, 3);
-    q.advanceTo('OBJ_FIND_GUN', { silent: true });
+    // OBJ_WAKE -> OBJ_SURVIVE: fire the real room-exit event (what crossing the
+    // doorway fires in normal play).
+    q.handleEvent({ type: 'left_room' });
+    // OBJ_SURVIVE -> OBJ_FIND_GUN: fire real zombie_killed events until cleared.
+    let guard = 0;
+    while (q.objectiveId() === 'OBJ_SURVIVE' && guard < 100) {
+      q.handleEvent({ type: 'zombie_killed' });
+      guard += 1;
+    }
+    // OBJ_FIND_GUN -> OBJ_MEET_SURVIVORS: real gun pickup.
     this.player.giveWeapon('gun');
-    q.handleEvent({ type: 'pickup', item: 'gun' }); // -> OBJ_MEET_SURVIVORS
-    q.advanceTo('OBJ_RESEARCH', { silent: true });
-    q.handleEvent({ type: 'enter_research' }); // -> OBJ_COLLECT (also reveals via zone)
+    q.handleEvent({ type: 'pickup', item: 'gun' });
+    // OBJ_MEET_SURVIVORS -> OBJ_RESEARCH: real talk event.
+    q.handleEvent({ type: 'talk_survivor' });
+    // OBJ_RESEARCH -> OBJ_COLLECT: real enter-research event (also reveals via zone).
+    q.handleEvent({ type: 'enter_research' });
 
     const zone = this.zones.OdishaCity;
     if (zone && typeof zone._revealIngredients === 'function') zone._revealIngredients();
 
     // Grant the required number of ingredients directly through the quest so
     // this works even if the pickups are not present (e.g. wrong active zone).
-    const need = q.requiredIngredients ? q.requiredIngredients : 3;
+    const need = q.requiredIngredients;
     while (q.ingredients < need) {
       q.handleEvent({ type: 'pickup', item: 'ingredient' });
     }
@@ -607,19 +619,25 @@ export class Game {
     return q.ingredients;
   }
 
-  /** Force the full win path (used by the test hook). */
+  /**
+   * Drive the full win path via the SAME real events a player triggers, from
+   * the opening OBJ_WAKE transition through the finale. No silent advanceTo
+   * shortcuts, so the harness exercises the real player path end to end.
+   */
   _forceWin() {
+    // OBJ_WAKE .. OBJ_COLLECT (via left_room, real kills, gun, talk, research)
+    // and grants all ingredients -> OBJ_TRAVEL.
     this._collectAllIngredients();
-    this.quest.advanceTo('OBJ_TRAVEL', { silent: true });
+    // OBJ_TRAVEL -> OBJ_DELIVER: travel north (real travel event + zone swap).
     if (this.activeZone !== this.zones.MedicalFacility) {
-      this._enterZone('MedicalFacility', 'default');
+      this.travelTo('MedicalFacility', 'default');
+    } else {
+      this.quest.handleEvent({ type: 'travel', zone: 'MedicalFacility' });
     }
-    this.quest.handleEvent({ type: 'travel', zone: 'MedicalFacility' });
+    // OBJ_DELIVER -> OBJ_FINALE: real deliver event.
     this.quest.handleEvent({ type: 'deliver' });
+    // OBJ_FINALE -> WIN: real board-helicopter event (fires onWin -> WIN state).
     this.quest.handleEvent({ type: 'board_helicopter' });
-    // If the flow did not reach WIN (e.g. skipped state), force it.
-    if (this.quest.objectiveId() !== 'WIN') this.quest.advanceTo('WIN', { silent: true });
-    this.setState(GameState.WIN);
     return this.state;
   }
 

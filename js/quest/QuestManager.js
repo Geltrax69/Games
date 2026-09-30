@@ -60,6 +60,8 @@ export class QuestManager {
     this.ingredients = 0;
     this.hasGun = false;
     this.criticalNpcLost = false;
+    // Single source of truth for the ingredient goal, read by Game.
+    this.requiredIngredients = REQUIRED_INGREDIENTS;
     this._emit(false);
   }
 
@@ -109,6 +111,7 @@ export class QuestManager {
 
   /**
    * Feed a game event into the flow. Recognized events:
+   *   { type:'left_room' }
    *   { type:'zombie_killed' }
    *   { type:'pickup', item:'gun'|'ingredient'|... }
    *   { type:'talk_survivor' }
@@ -123,9 +126,21 @@ export class QuestManager {
     const id = this.current.id;
 
     switch (evt.type) {
+      case 'left_room':
+        // The player crossed the doorway out of the starting room: the opening
+        // objective is complete. This is the intended trigger for OBJ_WAKE.
+        if (id === 'OBJ_WAKE') this.advanceTo('OBJ_SURVIVE');
+        break;
+
       case 'zombie_killed':
         this.kills += 1;
-        if (id === 'OBJ_SURVIVE' && this.kills >= SURVIVE_KILLS) {
+        // First zombie kill also clears OBJ_WAKE (fallback if the player fought
+        // in the doorway before the room-exit trigger fired), counting the kill
+        // toward OBJ_SURVIVE.
+        if (id === 'OBJ_WAKE') {
+          this.advanceTo('OBJ_SURVIVE');
+          if (this.kills >= SURVIVE_KILLS) this.advanceTo('OBJ_FIND_GUN');
+        } else if (id === 'OBJ_SURVIVE' && this.kills >= SURVIVE_KILLS) {
           this.advanceTo('OBJ_FIND_GUN');
         }
         break;
