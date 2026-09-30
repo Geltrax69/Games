@@ -10,6 +10,20 @@ It runs **entirely offline** as a static site: no build step, no bundler, no npm
 no external assets. Every mesh, texture, and sound is generated procedurally in
 code, and three.js itself is vendored locally.
 
+## Gameplay preview
+
+These screenshots were captured from the actual playable three.js build.
+
+![Zombie Apocalypse: Odisha Outbreak start screen](docs/screenshots/start-screen.png)
+
+| Fighting zombies in Odisha City | Finding cure ingredients at the research center |
+| :---: | :---: |
+| ![Pistol combat against zombies in Odisha City](docs/screenshots/odisha-city-combat.png) | ![Research center and a cure ingredient pickup](docs/screenshots/research-cure.png) |
+
+| Boarding the cure helicopter | Completing the campaign |
+| :---: | :---: |
+| ![Helicopter finale at the medical facility](docs/screenshots/medical-helicopter.png) | ![The World Is Saved victory screen](docs/screenshots/victory-screen.png) |
+
 ---
 
 ## 1. How to run
