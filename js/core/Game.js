@@ -1,17 +1,20 @@
-// Game: state machine + three.js scene setup + render loop.
+// Game: state machine + three.js scene setup + render loop + world/story.
 //
-// This is the foundation feature. It stands up the renderer, camera, lighting,
-// a placeholder zone (ground + boxes) so the scene renders, wires input and
-// audio, and exposes debugState() for the headless verification harness. Later
-// features attach the real player, zones, entities, HUD, and quest flow.
+// Stands up the renderer, camera, lighting, input, audio, player, and HUD, then
+// drives the story: modular zones (OdishaCity -> MedicalFacility), the cure
+// quest flow (QuestManager), friendly/hostile NPCs, zone travel, and the
+// win/lose finale. Exposes debugState() and window.__GAME__.test hooks for the
+// headless verification harness.
 
 import * as THREE from 'three';
 import { Input } from './Input.js';
 import { AudioManager } from './AudioManager.js';
-import { AssetFactory } from '../assets/AssetFactory.js';
 import { Player } from '../entities/Player.js';
 import { Zombie } from '../entities/Zombie.js';
 import { HUD } from '../ui/HUD.js';
+import { QuestManager } from '../quest/QuestManager.js';
+import { OdishaCity } from '../world/zones/OdishaCity.js';
+import { MedicalFacility } from '../world/zones/MedicalFacility.js';
 
 export const GameState = {
   START: 'START',
@@ -26,15 +29,14 @@ export class Game {
     this.container = container || document.body;
     this.state = GameState.START;
 
-    this.objectiveId = 'intro';
-    this.objectiveText = 'Survive. Grab your knife and clear the streets.';
-    this.zoneName = 'Odisha - Room';
+    this.zoneName = 'Odisha - City';
     this.activeZone = null;
     this.kills = 0;
 
     this._clock = new THREE.Clock();
     this._running = false;
     this._rafId = null;
+    this._interactCd = 0;
 
     this.audio = new AudioManager();
 
@@ -45,25 +47,36 @@ export class Game {
 
     this.input = new Input(this.camera, this.container);
 
-    // Player rides the PointerLockControls rig created inside Input.
-    this.player = new Player({
-      camera: this.camera,
-      controls: this.input.controls,
-      audio: this.audio,
-      onDeath: () => this._onPlayerDeath(),
-      onDamage: (n) => this._onPlayerDamage(n),
-    });
-
+    this.player = this._makePlayer();
     this.hud = new HUD();
 
-    this._loadPlaceholderZone();
-    this.player.setPosition(0, 6);
+    this.quest = new QuestManager({
+      onChange: (s) => this._onQuestChange(s),
+      onMessage: (t, ms) => this.hud.showMessage(t, ms),
+      onWin: () => this._onQuestWin(),
+    });
+    this.objectiveId = this.quest.objectiveId();
+    this.objectiveText = this.quest.objectiveText();
+
+    this._buildZones();
+    this._enterZone('OdishaCity', 'default');
+
     this._bindUI();
     this._installTestHooks();
 
     this._onResize = () => this._resize();
     window.addEventListener('resize', this._onResize);
     this._loop = this._loop.bind(this);
+  }
+
+  _makePlayer() {
+    return new Player({
+      camera: this.camera,
+      controls: this.input.controls,
+      audio: this.audio,
+      onDeath: () => this._onPlayerDeath(),
+      onDamage: (n) => this._onPlayerDamage(n),
+    });
   }
 
   _initRenderer() {
@@ -79,7 +92,7 @@ export class Game {
   _initScene() {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x1a1f2a);
-    this.scene.fog = new THREE.Fog(0x1a1f2a, 30, 140);
+    this.scene.fog = new THREE.Fog(0x1a1f2a, 30, 160);
   }
 
   _initCamera() {
@@ -110,82 +123,71 @@ export class Game {
     this.sun = dir;
   }
 
-  /**
-   * Swap the active zone. A zone is expected to expose a `group` (THREE.Object3D)
-   * and optional `name`. Placeholder zones are plain objects for now.
-   */
-  loadZone(zone) {
-    if (this.activeZone && this.activeZone.group) {
-      this.scene.remove(this.activeZone.group);
-    }
-    this.activeZone = zone;
-    if (zone && zone.group) this.scene.add(zone.group);
-    if (zone && zone.name) this.zoneName = zone.name;
+  /** Construct (but do not load) both zones with their quest wiring. */
+  _buildZones() {
+    this.zones = {
+      OdishaCity: new OdishaCity({
+        audio: this.audio,
+        onEnterResearch: () => this.quest.handleEvent({ type: 'enter_research' }),
+        onTalkSurvivor: () => this.quest.handleEvent({ type: 'talk_survivor' }),
+        onCriticalNpcKilled: (role) => this.quest.handleEvent({ type: 'critical_npc_killed', role }),
+        onMessage: (t, ms) => this.hud.showMessage(t, ms),
+      }),
+      MedicalFacility: new MedicalFacility({
+        audio: this.audio,
+        onDeliver: () => this.quest.handleEvent({ type: 'deliver' }),
+        onBoardHelicopter: () => this.quest.handleEvent({ type: 'board_helicopter' }),
+        onCriticalNpcKilled: (role) => this.quest.handleEvent({ type: 'critical_npc_killed', role }),
+        onMessage: (t, ms) => this.hud.showMessage(t, ms),
+      }),
+    };
   }
 
-  _loadPlaceholderZone() {
-    const group = new THREE.Group();
-    group.name = 'placeholder-zone';
-
-    group.add(AssetFactory.makeGround(200));
-
-    const colliders = [];
-
-    // A few placeholder buildings and props so the scene clearly renders.
-    const styles = ['concrete', 'brick', 'slum'];
-    for (let i = 0; i < 6; i++) {
-      const w = 6 + Math.random() * 6;
-      const h = 8 + Math.random() * 14;
-      const d = 6 + Math.random() * 6;
-      const b = AssetFactory.makeBuilding(w, h, d, styles[i % 3]);
-      const angle = (i / 6) * Math.PI * 2;
-      const bx = Math.cos(angle) * 22;
-      const bz = Math.sin(angle) * 22;
-      b.position.set(bx, h / 2, bz);
-      group.add(b);
-      colliders.push({ x: bx, z: bz, radius: Math.max(w, d) * 0.5 });
+  /** Unload the current zone (if any), load `id`, reposition the player. */
+  _enterZone(id, entry = 'default') {
+    const next = this.zones[id];
+    if (!next) return false;
+    if (this.activeZone && this.activeZone !== next) {
+      this.activeZone.unload(this.scene);
     }
+    this.activeZone = next;
+    next.load(this.scene);
+    this.zoneName = next.name;
 
-    for (let i = 0; i < 8; i++) {
-      const crate = AssetFactory.makeProp('crate');
-      const cx = (Math.random() - 0.5) * 24;
-      const cz = (Math.random() - 0.5) * 24;
-      crate.position.set(cx, 0, cz);
-      group.add(crate);
-      colliders.push({ x: cx, z: cz, radius: 0.7 });
-    }
-
-    const zone = { group, name: 'Odisha - Room', colliders, zombies: [], pickups: [] };
-
-    // Seed a couple of starter pickups: the gun (progression) and a medkit.
-    this._addPickup(zone, 'gun', 8, -4);
-    this._addPickup(zone, 'medkit', -8, -4);
-    this._addPickup(zone, 'ammo', 4, -10);
-
-    this.loadZone(zone);
+    const spawn = (next.entryPoints && next.entryPoints[entry]) || { x: 0, z: 0 };
+    this.player.setPosition(spawn.x, spawn.z);
+    return true;
   }
 
-  /** Create a pickup mesh in the zone and register it for proximity checks. */
-  _addPickup(zone, type, x, z) {
-    const mesh = AssetFactory.makePickup(type);
-    mesh.position.set(x, 0, z);
-    zone.group.add(mesh);
-    zone.pickups.push({ type, mesh, radius: 1.6 });
+  /** Travel to another zone: checks the exit's prerequisite, then swaps. */
+  travelTo(id, entry = 'default') {
+    if (!this._enterZone(id, entry)) return false;
+    this.quest.handleEvent({ type: 'travel', zone: id });
+    this.hud.showMessage('Arrived: ' + this.zoneName, 2400);
+    return true;
   }
 
-  /** Spawn a zombie into the active zone. Returns the Zombie. */
+  /** Spawn a zombie into the active zone (used by the test hook). */
   spawnZombie(x, z) {
     if (!this.activeZone) return null;
     if (x == null || z == null) {
       const angle = Math.random() * Math.PI * 2;
       const r = 12 + Math.random() * 10;
-      x = Math.cos(angle) * r;
-      z = Math.sin(angle) * r;
+      const p = this.player.group.position;
+      x = p.x + Math.cos(angle) * r;
+      z = p.z + Math.sin(angle) * r;
     }
-    const z1 = new Zombie({ position: { x, z }, audio: this.audio });
-    this.activeZone.group.add(z1.group);
-    this.activeZone.zombies.push(z1);
-    return z1;
+    return this.activeZone.spawnZombie(x, z);
+  }
+
+  _onQuestChange(s) {
+    this.objectiveId = s.objectiveId;
+    this.objectiveText = s.objectiveText;
+  }
+
+  _onQuestWin() {
+    this.audio.playSfx('victory');
+    this.setState(GameState.WIN);
   }
 
   _bindUI() {
@@ -199,33 +201,29 @@ export class Game {
   }
 
   _beginPlay() {
-    // AudioContext must be created from a user gesture.
     this.audio.resume();
     this.setState(GameState.PLAYING);
     this.input.setEnabled(true);
     this.input.requestLock();
   }
 
+  /** Full reset back to a fresh Odisha start. */
   _restart() {
-    // Reset player state and inventory (back to knife only).
+    // Detach current zone and dispose the player.
+    if (this.activeZone) this.activeZone.unload(this.scene);
     this.player.dispose();
-    this.player = new Player({
-      camera: this.camera,
-      controls: this.input.controls,
-      audio: this.audio,
-      onDeath: () => this._onPlayerDeath(),
-      onDamage: (n) => this._onPlayerDamage(n),
-    });
+    this.player = this._makePlayer();
 
-    // Clear and rebuild the zone (zombies + pickups fresh).
-    if (this.activeZone && this.activeZone.group) {
-      this.scene.remove(this.activeZone.group);
-    }
     this.kills = 0;
-    this.objectiveId = 'intro';
-    this.objectiveText = 'Survive. Grab your knife and clear the streets.';
-    this._loadPlaceholderZone();
-    this.player.setPosition(0, 6);
+    this.quest.reset();
+    this.objectiveId = this.quest.objectiveId();
+    this.objectiveText = this.quest.objectiveText();
+
+    // Rebuild zones fresh so pickups/NPCs/zombies are reset.
+    this._buildZones();
+    this.activeZone = null;
+    this._enterZone('OdishaCity', 'default');
+
     this._beginPlay();
   }
 
@@ -270,7 +268,6 @@ export class Game {
 
   _loop() {
     this._rafId = requestAnimationFrame(this._loop);
-    // Clamp delta so a tab switch / long frame does not cause a huge jump.
     const dt = Math.min(this._clock.getDelta(), 0.1);
     this.update(dt);
     this.renderer.render(this.scene, this.camera);
@@ -281,6 +278,7 @@ export class Game {
 
     const actions = this.input.consumeActions();
     const zone = this.activeZone;
+    if (this._interactCd > 0) this._interactCd = Math.max(0, this._interactCd - dt);
 
     // ---- Player input: weapon switch, reload, interact, attack ----
     if (actions.switchWeapon) {
@@ -291,10 +289,10 @@ export class Game {
     if (actions.reload) {
       if (this.player.reload()) this.hud.showMessage('Reloading...', 900);
     }
-    if (actions.interact) this._tryPickup();
+    if (actions.interact) this._tryInteract();
 
     if (actions.attack) {
-      const targets = zone && zone.zombies ? zone.zombies : [];
+      const targets = this._attackTargets();
       const res = this.player.attack(targets);
       if (res.fired && res.hits.length) this._afterHits(res.hits);
     }
@@ -302,11 +300,10 @@ export class Game {
     // ---- Player movement ----
     this.player.update(dt, this.input.keys, zone);
 
-    // ---- Zombie AI ----
+    // ---- Zombie AI (Game owns the player, so it drives zombie updates) ----
     if (zone && zone.zombies) {
       const list = zone.zombies;
       for (const z of list) z.update(dt, this.player, list);
-      // Remove finished-dead zombies and count kills.
       for (let i = list.length - 1; i >= 0; i--) {
         const z = list[i];
         if (!z.alive && z.state === 'DEAD' && z._deathT <= 0) {
@@ -316,8 +313,12 @@ export class Game {
       }
     }
 
-    // ---- Proximity pickup (auto-grab when very close) ----
+    // ---- Zone logic: pickups spin, NPC AI, corpse cleanup ----
+    if (zone) zone.update(dt, { player: this.player });
+
+    // ---- Auto-grab close pickups + check exits ----
     this._checkProximityPickups();
+    this._checkExits();
 
     // ---- HUD ----
     const w = this.player.currentWeapon;
@@ -332,29 +333,67 @@ export class Game {
     }, dt);
   }
 
-  /** Apply post-hit bookkeeping: count kills, show toast. */
+  /** Zombies + hostile NPCs are both attackable; friendlies are too (killable). */
+  _attackTargets() {
+    const zone = this.activeZone;
+    if (!zone) return [];
+    const targets = [];
+    if (zone.zombies) for (const z of zone.zombies) targets.push(z);
+    if (zone.npcs) for (const n of zone.npcs) targets.push(n);
+    return targets;
+  }
+
   _afterHits(hits) {
     for (const h of hits) {
       if (!h.alive) {
-        this.kills += 1;
-        this.hud.showMessage('Zombie down (' + this.kills + ')', 900);
+        // A killed zombie counts toward the survive objective; NPC deaths are
+        // surfaced by their own onDeath callbacks (quest fallback handling).
+        const isZombie = h instanceof Zombie;
+        if (isZombie) {
+          this.kills += 1;
+          this.quest.handleEvent({ type: 'zombie_killed' });
+          this.hud.showMessage('Zombie down (' + this.kills + ')', 900);
+        } else {
+          this.hud.showMessage('You killed a survivor...', 1400);
+        }
       }
     }
   }
 
-  _tryPickup() {
+  /** E press: talk to a friendly NPC, or trigger a landmark interactable. */
+  _tryInteract() {
+    if (this._interactCd > 0) return;
     const zone = this.activeZone;
-    if (!zone || !zone.pickups) return;
+    if (!zone) return;
     const pp = this.player.group.position;
-    for (let i = zone.pickups.length - 1; i >= 0; i--) {
-      const p = zone.pickups[i];
-      const dx = pp.x - p.mesh.position.x;
-      const dz = pp.z - p.mesh.position.z;
-      if (dx * dx + dz * dz <= (p.radius + 0.6) * (p.radius + 0.6)) {
-        this._grantPickup(p);
-        zone.group.remove(p.mesh);
-        zone.pickups.splice(i, 1);
-        return; // one per press
+
+    // Friendly / scientist NPC dialogue first.
+    if (zone.npcs) {
+      for (const n of zone.npcs) {
+        if (!n.alive || n.hostile) continue;
+        const dx = pp.x - n.group.position.x;
+        const dz = pp.z - n.group.position.z;
+        if (dx * dx + dz * dz <= 3.2 * 3.2) {
+          const line = n.interact();
+          if (line) {
+            this.hud.showMessage(line, 3200);
+            this._interactCd = 0.35;
+            return;
+          }
+        }
+      }
+    }
+
+    // Landmark interactables (research center, terminal, helicopter).
+    if (zone.interactables) {
+      for (const it of zone.interactables) {
+        const dx = pp.x - it.x;
+        const dz = pp.z - it.z;
+        if (dx * dx + dz * dz <= it.radius * it.radius) {
+          if (typeof it.action === 'function') it.action();
+          this._interactCd = 0.35;
+          return;
+        }
       }
     }
   }
@@ -365,11 +404,9 @@ export class Game {
     const pp = this.player.group.position;
     for (let i = zone.pickups.length - 1; i >= 0; i--) {
       const p = zone.pickups[i];
-      // Spin the pickup for visibility.
-      p.mesh.rotation.y += 0.03;
       const dx = pp.x - p.mesh.position.x;
       const dz = pp.z - p.mesh.position.z;
-      if (dx * dx + dz * dz <= 0.9 * 0.9) {
+      if (dx * dx + dz * dz <= 1.4 * 1.4) {
         this._grantPickup(p);
         zone.group.remove(p.mesh);
         zone.pickups.splice(i, 1);
@@ -382,8 +419,8 @@ export class Game {
     switch (p.type) {
       case 'gun':
         this.player.giveWeapon('gun');
-        this.objectiveText = 'You found a gun. Press 1/2 to switch weapons.';
         this.hud.showMessage('Picked up a Pistol! (press 2)', 2000);
+        this.quest.handleEvent({ type: 'pickup', item: 'gun' });
         break;
       case 'ammo':
         this.player.addAmmo(24);
@@ -393,20 +430,46 @@ export class Game {
         this.player.heal(40);
         this.hud.showMessage('Used a medkit (+40 HP)', 1500);
         break;
+      case 'ingredient':
+        this.hud.showMessage('Collected a cure ingredient', 1600);
+        this.quest.handleEvent({ type: 'pickup', item: 'ingredient' });
+        break;
       default:
         this.hud.showMessage('Picked up ' + p.type, 1500);
         break;
     }
   }
 
-  /** Headless test hooks so combat is exercisable without real mouse input. */
+  /** If the player is standing in an exit trigger and prereqs pass, travel. */
+  _checkExits() {
+    const zone = this.activeZone;
+    if (!zone || !zone.exits) return;
+    const pp = this.player.group.position;
+    const ctx = { quest: this.quest, player: this.player };
+    for (const ex of zone.exits) {
+      const dx = pp.x - ex.x;
+      const dz = pp.z - ex.z;
+      if (dx * dx + dz * dz > ex.radius * ex.radius) continue;
+      if (typeof ex.requires === 'function' && !ex.requires(ctx)) {
+        // Not yet: give feedback but do not spam.
+        if (!ex._blockedShown) {
+          this.hud.showMessage('Collect all ingredients before heading north.', 2200);
+          ex._blockedShown = true;
+        }
+        continue;
+      }
+      ex._blockedShown = false;
+      this.travelTo(ex.target, ex.entry);
+      return;
+    }
+  }
+
+  /** Headless test hooks so the full story is walkable without input. */
   _installTestHooks() {
     this.test = {
       spawnZombie: (x, z) => this.spawnZombie(x, z),
       attack: () => {
-        const zone = this.activeZone;
-        const targets = zone && zone.zombies ? zone.zombies : [];
-        const res = this.player.attack(targets);
+        const res = this.player.attack(this._attackTargets());
         if (res.fired && res.hits.length) this._afterHits(res.hits);
         return res;
       },
@@ -418,13 +481,114 @@ export class Game {
           if (z.alive) { z.takeDamage(9999); n += 1; }
         }
         this.kills += n;
+        for (let i = 0; i < n; i++) this.quest.handleEvent({ type: 'zombie_killed' });
         return n;
       },
       giveGun: () => {
         this.player.giveWeapon('gun');
+        this.quest.handleEvent({ type: 'pickup', item: 'gun' });
         return this.player.hasGun;
       },
+      // Story hooks:
+      travelTo: (zoneName, entry) => this.travelTo(zoneName, entry || 'default'),
+      advanceObjective: () => this.quest.advanceOne(),
+      interactNearest: () => this._interactNearest(),
+      collectAllIngredients: () => this._collectAllIngredients(),
+      triggerWin: () => this._forceWin(),
+      triggerLose: () => this._forceLose(),
     };
+  }
+
+  /** Interact with the nearest NPC or interactable regardless of distance. */
+  _interactNearest() {
+    const zone = this.activeZone;
+    if (!zone) return null;
+    const pp = this.player.group.position;
+    let best = null;
+    let bestD = Infinity;
+    let bestKind = null;
+
+    if (zone.npcs) {
+      for (const n of zone.npcs) {
+        if (!n.alive || n.hostile) continue;
+        const d = pp.distanceToSquared(n.group.position);
+        if (d < bestD) { bestD = d; best = n; bestKind = 'npc'; }
+      }
+    }
+    if (zone.interactables) {
+      for (const it of zone.interactables) {
+        const dx = pp.x - it.x;
+        const dz = pp.z - it.z;
+        const d = dx * dx + dz * dz;
+        if (d < bestD) { bestD = d; best = it; bestKind = 'it'; }
+      }
+    }
+    if (!best) return null;
+    if (bestKind === 'npc') {
+      const line = best.interact();
+      if (line) this.hud.showMessage(line, 3200);
+      return line;
+    }
+    if (typeof best.action === 'function') best.action();
+    return best.id;
+  }
+
+  /**
+   * Drive the quest far enough to reveal + collect every ingredient in the
+   * current (Odisha) zone. Advances the earlier objectives as needed so the
+   * ingredient pickups exist, then grants them.
+   */
+  _collectAllIngredients() {
+    // Make sure the earlier objectives are satisfied so OBJ_COLLECT is active.
+    const q = this.quest;
+    q.kills = Math.max(q.kills, 3);
+    q.advanceTo('OBJ_FIND_GUN', { silent: true });
+    this.player.giveWeapon('gun');
+    q.handleEvent({ type: 'pickup', item: 'gun' }); // -> OBJ_MEET_SURVIVORS
+    q.advanceTo('OBJ_RESEARCH', { silent: true });
+    q.handleEvent({ type: 'enter_research' }); // -> OBJ_COLLECT (also reveals via zone)
+
+    const zone = this.zones.OdishaCity;
+    if (zone && typeof zone._revealIngredients === 'function') zone._revealIngredients();
+
+    // Grant the required number of ingredients directly through the quest so
+    // this works even if the pickups are not present (e.g. wrong active zone).
+    const need = q.requiredIngredients ? q.requiredIngredients : 3;
+    while (q.ingredients < need) {
+      q.handleEvent({ type: 'pickup', item: 'ingredient' });
+    }
+    // Remove any remaining ingredient pickup meshes from the Odisha zone.
+    if (zone && zone.pickups) {
+      for (let i = zone.pickups.length - 1; i >= 0; i--) {
+        if (zone.pickups[i].type === 'ingredient') {
+          zone.group.remove(zone.pickups[i].mesh);
+          zone.pickups.splice(i, 1);
+        }
+      }
+    }
+    return q.ingredients;
+  }
+
+  /** Force the full win path (used by the test hook). */
+  _forceWin() {
+    this._collectAllIngredients();
+    this.quest.advanceTo('OBJ_TRAVEL', { silent: true });
+    if (this.activeZone !== this.zones.MedicalFacility) {
+      this._enterZone('MedicalFacility', 'default');
+    }
+    this.quest.handleEvent({ type: 'travel', zone: 'MedicalFacility' });
+    this.quest.handleEvent({ type: 'deliver' });
+    this.quest.handleEvent({ type: 'board_helicopter' });
+    // If the flow did not reach WIN (e.g. skipped state), force it.
+    if (this.quest.objectiveId() !== 'WIN') this.quest.advanceTo('WIN', { silent: true });
+    this.setState(GameState.WIN);
+    return this.state;
+  }
+
+  _forceLose() {
+    if (this.player) this.player.takeDamage(99999);
+    if (this.state !== GameState.LOSE) this.setState(GameState.LOSE);
+    return this.state;
   }
 
   _resize() {
@@ -446,10 +610,11 @@ export class Game {
       health: this.player ? this.player.health : 0,
       ammo: w && !w.melee ? w.ammo : 0,
       weapon: w ? w.type : 'knife',
-      objectiveId: this.objectiveId,
+      objectiveId: this.quest ? this.quest.objectiveId() : this.objectiveId,
       zombieCount: liveZombies,
       kills: this.kills,
-      zone: this.zoneName,
+      zone: this.activeZone ? this.activeZone.id : this.zoneName,
+      ingredients: this.quest ? this.quest.ingredients : 0,
     };
   }
 

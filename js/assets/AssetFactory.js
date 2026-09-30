@@ -305,6 +305,209 @@ export function makeProp(kind = 'crate') {
   return group;
 }
 
+/** A glowing floor disc that marks a travel exit or landmark trigger. */
+export function makeExitMarker(color = 0x66ccff) {
+  const group = new THREE.Group();
+  group.name = 'exit-marker';
+  const ring = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.4, 1.4, 0.08, 24),
+    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6, roughness: 0.4 })
+  );
+  ring.position.y = 0.04;
+  group.add(ring);
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.35, 0.35, 4, 12),
+    new THREE.MeshStandardMaterial({
+      color, emissive: color, emissiveIntensity: 0.5,
+      transparent: true, opacity: 0.28, roughness: 0.5,
+    })
+  );
+  beam.position.y = 2;
+  group.add(beam);
+  return group;
+}
+
+/** A small floor marker for interactable landmarks (research desk, heli pad). */
+export function makeInteractableMarker(color = 0x9fe07f) {
+  const group = new THREE.Group();
+  group.name = 'interactable-marker';
+  const disc = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.2, 1.2, 0.06, 20),
+    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5, roughness: 0.5 })
+  );
+  disc.position.y = 0.03;
+  group.add(disc);
+  return group;
+}
+
+/**
+ * An enclosed starting room: floor, four walls with a doorway gap on the -Z
+ * side, and a bed. Returns { group, colliders, doorway:{x,z} }. Walls are thin
+ * boxes; colliders are added as short segments of small circles so the player
+ * is contained but can leave through the doorway.
+ */
+export function makeRoom(size = 12) {
+  const group = new THREE.Group();
+  group.name = 'room';
+  const half = size / 2;
+  const wallH = 4;
+  const wallT = 0.4;
+
+  const floorTex = makeCanvasTexture((ctx, s) => {
+    ctx.fillStyle = '#5a4636';
+    ctx.fillRect(0, 0, s, s);
+    ctx.strokeStyle = '#4a382a';
+    ctx.lineWidth = 2;
+    for (let i = 0; i <= s; i += s / 6) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, s); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(s, i); ctx.stroke();
+    }
+  }, 128, 'room-floor');
+  floorTex.repeat.set(2, 2);
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(size, size),
+    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.9 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = 0.02;
+  floor.receiveShadow = true;
+  group.add(floor);
+
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x8a8378, roughness: 0.95 });
+  const colliders = [];
+  const addWall = (w, d, x, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, d), wallMat);
+    m.position.set(x, wallH / 2, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    group.add(m);
+    // Approximate the wall with a row of circular colliders.
+    const long = Math.max(w, d);
+    const steps = Math.max(2, Math.round(long / 1.5));
+    for (let i = 0; i <= steps; i++) {
+      const t = steps === 0 ? 0.5 : i / steps;
+      const cx = w > d ? (x - w / 2 + t * w) : x;
+      const cz = w > d ? z : (z - d / 2 + t * d);
+      colliders.push({ x: cx, z: cz, radius: 0.8 });
+    }
+  };
+
+  // Back (+Z), left (-X), right (+X) full walls.
+  addWall(size, wallT, 0, half);
+  addWall(wallT, size, -half, 0);
+  addWall(wallT, size, half, 0);
+  // Front (-Z) wall split into two segments leaving a doorway in the middle.
+  const doorWidth = 2.4;
+  const segW = (size - doorWidth) / 2;
+  addWall(segW, wallT, -(doorWidth / 2 + segW / 2), -half);
+  addWall(segW, wallT, (doorWidth / 2 + segW / 2), -half);
+
+  // Bed in a corner.
+  const bed = new THREE.Group();
+  const frame = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 0.4, 3.2),
+    new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.85 })
+  );
+  frame.position.y = 0.2;
+  const mattress = new THREE.Mesh(
+    new THREE.BoxGeometry(2.0, 0.3, 3.0),
+    new THREE.MeshStandardMaterial({ color: 0xcfc6b8, roughness: 0.9 })
+  );
+  mattress.position.y = 0.55;
+  bed.add(frame, mattress);
+  bed.position.set(-half + 1.8, 0, half - 2.2);
+  bed.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  group.add(bed);
+
+  return { group, colliders, doorway: { x: 0, z: -half } };
+}
+
+/** A temple-like Odisha landmark (stepped base + curved spire). */
+export function makeTemple() {
+  const group = new THREE.Group();
+  group.name = 'temple';
+  const stone = new THREE.MeshStandardMaterial({ color: 0xb7a07a, roughness: 0.95 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(8, 3, 8), stone);
+  base.position.y = 1.5;
+  group.add(base);
+  const mid = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 6), stone);
+  mid.position.y = 4.5;
+  group.add(mid);
+  // Rekha-deul style curved tower approximated with a tall cone.
+  const spire = new THREE.Mesh(new THREE.ConeGeometry(3.2, 9, 12), stone);
+  spire.position.y = 10.5;
+  group.add(spire);
+  const cap = new THREE.Mesh(
+    new THREE.SphereGeometry(0.9, 12, 10),
+    new THREE.MeshStandardMaterial({ color: 0xd8b45a, metalness: 0.4, roughness: 0.5 })
+  );
+  cap.position.y = 15.4;
+  group.add(cap);
+  group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return group;
+}
+
+/** A labelled facility building (research center / medical facility). */
+export function makeFacility(w = 14, h = 8, d = 12, accent = 0x4aa3d0) {
+  const group = new THREE.Group();
+  group.name = 'facility';
+  const wall = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshStandardMaterial({ color: 0xd7dbe0, roughness: 0.85 })
+  );
+  wall.position.y = h / 2;
+  group.add(wall);
+  // Accent stripe + entrance.
+  const stripe = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.1, 1.2, d + 0.1),
+    new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 0.25, roughness: 0.6 })
+  );
+  stripe.position.y = h - 1.4;
+  group.add(stripe);
+  const door = new THREE.Mesh(
+    new THREE.BoxGeometry(2.4, 3, 0.3),
+    new THREE.MeshStandardMaterial({ color: 0x223038, roughness: 0.7 })
+  );
+  door.position.set(0, 1.5, d / 2 + 0.05);
+  group.add(door);
+  group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return group;
+}
+
+/** A helicopter for the finale (body, tail, rotor). */
+export function makeHelicopter() {
+  const group = new THREE.Group();
+  group.name = 'helicopter';
+  const green = new THREE.MeshStandardMaterial({ color: 0x3b4a35, metalness: 0.3, roughness: 0.6 });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1.4, 16, 12), green);
+  body.scale.set(1.2, 1.0, 1.8);
+  body.position.y = 1.6;
+  group.add(body);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 3.2), green);
+  tail.position.set(0, 1.9, 2.6);
+  group.add(tail);
+  const tailFin = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.0, 0.6), green);
+  tailFin.position.set(0, 2.3, 4.0);
+  group.add(tailFin);
+  // Skids.
+  const skidMat = new THREE.MeshStandardMaterial({ color: 0x22262a, metalness: 0.5, roughness: 0.5 });
+  const skidL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 3), skidMat);
+  skidL.position.set(-1.0, 0.5, 0);
+  const skidR = skidL.clone();
+  skidR.position.x = 1.0;
+  group.add(skidL, skidR);
+  // Main rotor (spins in the finale via userData.rotor).
+  const rotor = new THREE.Mesh(
+    new THREE.BoxGeometry(6.5, 0.08, 0.3),
+    new THREE.MeshStandardMaterial({ color: 0x111417, roughness: 0.6 })
+  );
+  rotor.position.y = 3.0;
+  group.add(rotor);
+  group.userData.rotor = rotor;
+  group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return group;
+}
+
 export const AssetFactory = {
   makeCanvasTexture,
   makeGround,
@@ -316,6 +519,12 @@ export const AssetFactory = {
   makePickup,
   makeNPC,
   makeProp,
+  makeExitMarker,
+  makeInteractableMarker,
+  makeRoom,
+  makeTemple,
+  makeFacility,
+  makeHelicopter,
 };
 
 export default AssetFactory;
